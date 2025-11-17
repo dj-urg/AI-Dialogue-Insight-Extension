@@ -1,0 +1,19 @@
+{
+  "manifest_version": 2,
+  "name": "AI Chat Exporter",
+  "version": "1.0.1",
+  "description": "Export Claude and DeepSeek public chats to CSV. All processing happens locally - no data leaves your browser.",
+  "permissions": [
+    "activeTab"
+  ],
+  "content_security_policy": "script-src 'self'; object-src 'none';",
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icon.png"
+    }
+  },
+  "icons": {
+    "48": "icon.png"
+  }
+}

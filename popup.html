@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+    }
+    
+    h3 {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    #status {
+      margin-bottom: 16px;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    
+    #status.supported {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #a5d6a7;
+    }
+    
+    #status.unsupported {
+      background-color: #fff3e0;
+      color: #e65100;
+      border: 1px solid #ffcc80;
+    }
+    
+    #status.error {
+      background-color: #ffebee;
+      color: #c62828;
+      border: 1px solid #ef9a9a;
+    }
+    
+    #exportBtn {
+      width: 100%;
+      padding: 10px;
+      background-color: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    #exportBtn:hover:not(:disabled) {
+      background-color: #1565c0;
+    }
+    
+    #exportBtn:disabled {
+      background-color: #bdbdbd;
+      cursor: not-allowed;
+    }
+
+    #privacyNotice {
+      margin-top: 16px;
+      padding: 8px;
+      background-color: #f5f5f5;
+      border-left: 3px solid #1976d2;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #666;
+    }
+
+    #privacyNotice strong {
+      color: #333;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <h3>AI Chat Exporter</h3>
+  <div id="status"></div>
+  <button id="exportBtn">Export this chat to CSV</button>
+  <div id="privacyNotice">
+    <strong>🔒 Privacy:</strong> All processing happens locally in your browser. No data is sent to external servers or stored permanently.
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

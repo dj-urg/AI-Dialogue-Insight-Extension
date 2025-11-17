@@ -1,0 +1,169 @@
+# ============================================================================
+# AI Chat Exporter - Git Ignore Configuration
+# ============================================================================
+# This file ensures only essential extension files are committed to the repo.
+# Excludes development artifacts, OS files, and Python virtual environments.
+
+# ============================================================================
+# Python Virtual Environments
+# ============================================================================
+venv/
+env/
+ENV/
+.venv/
+.env/
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ============================================================================
+# Operating System Files
+# ============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ============================================================================
+# IDE and Editor Files
+# ============================================================================
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (WebStorm, IntelliJ, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+Sessionx.vim
+.netrwhist
+tags
+[._]*.un~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ============================================================================
+# Build and Distribution Files
+# ============================================================================
+
+# Extension build artifacts
+*.zip
+*.xpi
+web-ext-artifacts/
+dist/
+build/
+
+# Node modules (if you add npm in the future)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# ============================================================================
+# Temporary and Log Files
+# ============================================================================
+
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.cache
+
+# ============================================================================
+# Testing and Coverage
+# ============================================================================
+
+coverage/
+.nyc_output/
+*.lcov
+
+# ============================================================================
+# Security and Secrets
+# ============================================================================
+
+.env
+.env.local
+.env.*.local
+secrets.json
+*.key
+*.pem
+*.cert
+
+# ============================================================================
+# KEEP THESE FILES (Essential Extension Files)
+# ============================================================================
+# The following files SHOULD be committed:
+# - manifest.json (extension configuration)
+# - popup.html (popup UI)
+# - popup.js (popup logic)
+# - content.js (content script)
+# - icon.png (extension icon)
+# - README.md (documentation)
+# - *.md (all markdown documentation)
+# - validate_extension.sh (validation script)
+# - .gitignore (this file)
+
