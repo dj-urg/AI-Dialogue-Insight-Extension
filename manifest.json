@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI Chat Exporter",
   "version": "2.0.0",
-  "description": "Export conversations from ChatGPT, Claude, DeepSeek, Gemini, and Co-pilot to CSV. All processing happens locally in your browser.",
+  "description": "Export conversations from ChatGPT, Claude, and Co-pilot to CSV. All processing happens locally in your browser.",
   "permissions": [
     "activeTab",
     "downloads",
@@ -12,8 +12,6 @@
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
     "https://claude.ai/*",
-    "https://chat.deepseek.com/*",
-    "https://deepseek.com/*",
     "https://copilot.microsoft.com/*",
     "https://copilotstudio.microsoft.com/*"
   ],
@@ -24,6 +22,7 @@
         "https://chat.openai.com/*"
       ],
       "js": [
+        "shared/message-security.js",
         "platforms/chatgpt/inject.js"
       ],
       "run_at": "document_start",
@@ -35,6 +34,7 @@
         "https://chat.openai.com/*"
       ],
       "js": [
+        "shared/message-security.js",
         "platforms/chatgpt/content.js"
       ],
       "run_at": "document_start"
@@ -44,6 +44,7 @@
         "https://claude.ai/chat/*"
       ],
       "js": [
+        "shared/message-security.js",
         "platforms/claude/inject.js"
       ],
       "run_at": "document_start",
@@ -54,26 +55,19 @@
         "https://claude.ai/chat/*"
       ],
       "js": [
+        "shared/message-security.js",
         "platforms/claude/content.js"
       ],
       "run_at": "document_start"
     },
-    {
-      "matches": [
-        "https://chat.deepseek.com/*",
-        "https://deepseek.com/*"
-      ],
-      "js": [
-        "platforms/deepseek/content.js"
-      ],
-      "run_at": "document_idle"
-    },
+
     {
       "matches": [
         "https://copilot.microsoft.com/*",
         "https://copilotstudio.microsoft.com/*"
       ],
       "js": [
+        "shared/message-security.js",
         "platforms/copilot/inject.js"
       ],
       "run_at": "document_start",
@@ -85,6 +79,7 @@
         "https://copilotstudio.microsoft.com/*"
       ],
       "js": [
+        "shared/message-security.js",
         "platforms/copilot/content.js"
       ],
       "run_at": "document_start"

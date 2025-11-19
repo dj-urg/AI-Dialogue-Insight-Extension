@@ -27,7 +27,11 @@
   const conversationTimestamps = new Map();
 
   // Generate a cryptographic secret for message signing
-  const SECRET_KEY = generateSecretKey();
+  let SECRET_KEY = null;
+  MessageSecurity.generateSecretKey().then(key => {
+    SECRET_KEY = key;
+    injectSecretIntoPage();
+  });
 
   /**
    * Redact sensitive information from log data
@@ -98,14 +102,7 @@
     }
   }
 
-  /**
-   * Generate a cryptographic secret key
-   */
-  function generateSecretKey() {
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-  }
+
 
   /**
    * Store conversation with memory management
@@ -160,40 +157,13 @@
   // Start periodic cleanup
   setInterval(cleanupOldConversations, CLEANUP_INTERVAL_MS);
 
-  /**
-   * Verify HMAC-SHA256 signature
-   */
-  async function verifySignature(message, signature, secret) {
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(secret);
-    const messageData = encoder.encode(message);
 
-    const key = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-
-    const expectedSig = await crypto.subtle.sign('HMAC', key, messageData);
-    const expectedHex = Array.from(new Uint8Array(expectedSig), byte =>
-      byte.toString(16).padStart(2, '0')
-    ).join('');
-
-    // Constant-time comparison
-    if (signature.length !== expectedHex.length) return false;
-    let result = 0;
-    for (let i = 0; i < signature.length; i++) {
-      result |= signature.charCodeAt(i) ^ expectedHex.charCodeAt(i);
-    }
-    return result === 0;
-  }
 
   /**
    * Inject secret key into page for inject.js to use
    */
   function injectSecretIntoPage() {
+    if (!SECRET_KEY) return;
     const secretElement = document.createElement('meta');
     secretElement.name = 'chatgpt-exporter-secret';
     secretElement.content = SECRET_KEY;
@@ -201,8 +171,7 @@
     (document.head || document.documentElement).appendChild(secretElement);
   }
 
-  // Inject secret as early as possible
-  injectSecretIntoPage();
+  // Inject secret as early as possible (will be called when key is ready)
 
   /**
    * Listen for messages from the injected page script
@@ -220,27 +189,21 @@
       return;
     }
 
-    // Verify signature
-    if (!event.data.signature || !event.data.timestamp || !event.data.nonce) {
-      console.warn(`[${PLATFORM}] Message missing security fields`);
+    // Verify signed message using shared module
+    if (!SECRET_KEY) {
+      logWarn('Secret key not ready yet');
       return;
     }
 
-    // Verify timestamp (prevent replay attacks - max 30 seconds old)
-    const now = Date.now();
-    const age = now - event.data.timestamp;
-    if (age < 0 || age > 30000) {
-      logWarn('Message timestamp out of valid range');
-      return;
-    }
+    const verification = await MessageSecurity.verifySignedMessage(
+      event.data,
+      MESSAGE_TYPE,
+      SOURCE_ID,
+      SECRET_KEY
+    );
 
-    // Verify signature
-    const { signature, ...messageData } = event.data;
-    const messageString = JSON.stringify(messageData);
-    const isValid = await verifySignature(messageString, signature, SECRET_KEY);
-
-    if (!isValid) {
-      logWarn('Invalid message signature - possible injection attempt');
+    if (!verification.isValid) {
+      logWarn('Message verification failed', { error: verification.error });
       return;
     }
 

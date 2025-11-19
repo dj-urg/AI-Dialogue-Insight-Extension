@@ -135,43 +135,9 @@
     return { isValid: true };
   }
 
-  /**
-   * Get secret key from meta tag injected by content script
-   */
-  function getSecretKey() {
-    if (SECRET_KEY) return SECRET_KEY;
 
-    const meta = document.querySelector('meta[name="chatgpt-exporter-secret"]');
-    if (meta) {
-      SECRET_KEY = meta.content;
-      return SECRET_KEY;
-    }
 
-    // If not found, wait and try again
-    return null;
-  }
 
-  /**
-   * Sign a message using HMAC-SHA256
-   */
-  async function signMessage(message, secret) {
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(secret);
-    const messageData = encoder.encode(message);
-
-    const key = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-
-    const signature = await crypto.subtle.sign('HMAC', key, messageData);
-    return Array.from(new Uint8Array(signature), byte =>
-      byte.toString(16).padStart(2, '0')
-    ).join('');
-  }
 
   /**
    * Send data to content script with cryptographic signature
@@ -184,36 +150,25 @@
       capturedIds.add(conversationId);
     }
 
-    // Get secret key
-    const secret = getSecretKey();
+    // Get secret key using shared helper
+    const secret = MessageSecurity.getSharedSecret('chatgpt-exporter-secret');
     if (!secret) {
       logWarn('Secret key not available, cannot send message');
       return;
     }
 
-    // Create message with timestamp and nonce
-    const timestamp = Date.now();
-    const nonce = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
-
-    const messageData = {
-      type: MESSAGE_TYPE,
-      payload: data,
-      source: SOURCE_ID,
-      platform: 'chatgpt',
-      timestamp: timestamp,
-      nonce: nonce
-    };
-
-    // Sign the message
-    const messageString = JSON.stringify(messageData);
-    const signature = await signMessage(messageString, secret);
+    // Create signed message using shared module
+    const signedMessage = await MessageSecurity.createSignedMessage(
+      data,
+      MESSAGE_TYPE,
+      SOURCE_ID,
+      'chatgpt',
+      secret
+    );
 
     // Send signed message
     window.postMessage(
-      {
-        ...messageData,
-        signature: signature
-      },
+      signedMessage,
       window.location.origin
     );
 

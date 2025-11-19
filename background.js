@@ -1,14 +1,16 @@
 /**
  * Main Background Script - Platform Router
- * 
+ *
  * Routes conversation data to platform-specific handlers
  * and manages CSV generation and downloads
  */
 
 import { extractChatGPTConversation } from './platforms/chatgpt/extractor.js';
+import { EXTENSION_CONFIG } from './config/settings.js';
+import { escapeCSVField, generateCSV, createCSVBlob, generateFilename } from './utils/csv.js';
 
-// Platform handlers
-const platformHandlers = {};
+
+
 
 /**
  * Claude Platform Handler
@@ -149,89 +151,6 @@ const CopilotHandler = {
   }
 };
 
-/**
- * CSV Utility Functions (from utils/csv.js)
- */
-
-/**
- * Escapes a field value for CSV format according to RFC 4180
- * Also prevents CSV injection attacks
- */
-function escapeCSVField(value) {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  let stringValue = String(value);
-
-  // Prevent CSV injection: sanitize values starting with dangerous characters
-  // These characters can trigger formula execution in Excel/Sheets: = + - @ \t \r
-  const dangerousChars = ['=', '+', '-', '@', '\t', '\r'];
-  if (dangerousChars.some(char => stringValue.startsWith(char))) {
-    // Prefix with single quote to treat as text
-    stringValue = "'" + stringValue;
-  }
-
-  // Standard CSV escaping per RFC 4180
-  if (stringValue.includes(',') || stringValue.includes('"') ||
-    stringValue.includes('\n') || stringValue.includes('\r')) {
-    return '"' + stringValue.replace(/"/g, '""') + '"';
-  }
-
-  return stringValue;
-}
-
-/**
- * Generates CSV content from an array of objects
- */
-function generateCSV(data, headers = null) {
-  if (!data || data.length === 0) {
-    return '';
-  }
-
-  if (!headers) {
-    headers = Object.keys(data[0]);
-  }
-
-  const headerRow = headers.map(escapeCSVField).join(',');
-
-  const rows = [headerRow];
-  for (const row of data) {
-    const values = headers.map(header => escapeCSVField(row[header]));
-    rows.push(values.join(','));
-  }
-
-  return rows.join('\n');
-}
-
-/**
- * Generates a CSV file with UTF-8 BOM for Excel compatibility
- */
-function createCSVBlob(csvContent) {
-  const BOM = '\uFEFF';
-  return new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-}
-
-/**
- * Generates a filename with timestamp
- */
-function generateFilename(prefix = 'export', suffix = '') {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-
-  const timestamp = `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
-
-  if (suffix) {
-    return `${prefix}_${suffix}_${timestamp}.csv`;
-  }
-
-  return `${prefix}_${timestamp}.csv`;
-}
 
 /**
  * Validate conversation data structure and size
@@ -366,14 +285,8 @@ function handleConversationData(message) {
     } else if (platform === 'copilot' && CopilotHandler) {
       rows = CopilotHandler.flattenConversationData(conversationData);
     } else {
-      // Fallback: try to use generic handler or platform-specific handler
-      const handler = platformHandlers[platform];
-      if (handler && handler.flattenConversationData) {
-        rows = handler.flattenConversationData(conversationData);
-      } else {
-        console.error(`[${platform}] No handler found for platform`);
-        return;
-      }
+      console.error(`[${platform}] No handler found for platform`);
+      return;
     }
 
     // If we have rows (legacy single CSV path), convert to csvFiles format
@@ -438,13 +351,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (sender.tab) {
     try {
       const url = new URL(sender.tab.url);
-      const allowedDomains = [
-        'chatgpt.com',
-        'chat.openai.com',
-        'claude.ai',
-        'copilot.microsoft.com',
-        'chat.deepseek.com'
-      ];
+      const allowedDomains = Object.values(EXTENSION_CONFIG.platforms)
+        .filter(platform => platform.enabled)
+        .reduce((acc, platform) => acc.concat(platform.domains || []), []);
 
       if (!allowedDomains.some(domain => url.hostname.endsWith(domain))) {
         console.warn('[Background] Message from unauthorized domain:', url.hostname);
@@ -490,7 +399,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   }
 
   // Add other platform message types here as they're implemented
-  // if (message.type === 'DEEPSEEK_CONVERSATION_DATA') { ... }
+
 
   return false;
 });
@@ -501,7 +410,7 @@ console.log('AI Chat Exporter: Main background script loaded at ' + new Date().t
 // Register critical functions for integrity checking
 const criticalFunctions = {
   validateConversationData,
-  sanitizeForCSV: ClaudeHandler.sanitizeForCSV,
+  escapeCSVField,
   extractChatGPTConversation
 };
 

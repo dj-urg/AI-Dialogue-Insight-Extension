@@ -147,17 +147,6 @@ function deepSearchForProperty(obj, property, maxDepth = 5, currentDepth = 0, vi
   return null;
 }
 
-/**
- * Log message with platform prefix
- * @param {string} platform - Platform name
- * @param {string} message - Message to log
- * @param {string} level - Log level ('log', 'warn', 'error')
- */
-function log(platform, message, level = 'log') {
-  const prefix = `[${platform}]`;
-  console[level](`${prefix} ${message}`);
-}
-
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -165,9 +154,6 @@ if (typeof module !== 'undefined' && module.exports) {
     extractTextContent,
     sanitizeTimestamp,
     generateFilename,
-    deepSearchForProperty,
-    log
+    deepSearchForProperty
   };
 }
-
-

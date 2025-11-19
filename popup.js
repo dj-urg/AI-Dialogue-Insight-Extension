@@ -1,6 +1,6 @@
 /**
  * popup.js - Popup UI Logic
- * 
+ *
  * Multi-platform UI that:
  * 1. Detects which platform the user is on
  * 2. Shows status of captured conversations
@@ -8,13 +8,12 @@
  */
 
 // ============================================================================
-// PLATFORM CONFIGURATION (Single Source of Truth)
+// PLATFORM CONFIGURATION (UI-specific; core config in config/settings.js)
 // ============================================================================
 
 const PLATFORMS = {
   chatgpt: {
     name: 'ChatGPT',
-    domains: ['chatgpt.com', 'chat.openai.com'],
     icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" fill="currentColor"/></svg>',
     requiresConversationId: true,
     extractConversationId: (url) => {
@@ -24,7 +23,6 @@ const PLATFORMS = {
   },
   claude: {
     name: 'Claude',
-    domains: ['claude.ai'],
     icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17.5 3.5L14 10l3.5 6.5L21 10l-3.5-6.5z" fill="currentColor"/><path d="M10 3.5L6.5 10 10 16.5 13.5 10 10 3.5z" fill="currentColor"/><path d="M6.5 10L3 16.5 6.5 23 10 16.5 6.5 10z" fill="currentColor"/></svg>',
     requiresConversationId: true,
     extractConversationId: (url) => {
@@ -34,7 +32,6 @@ const PLATFORMS = {
   },
   copilot: {
     name: 'Copilot',
-    domains: ['copilot.microsoft.com', 'copilotstudio.microsoft.com'],
     icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/><circle cx="8.5" cy="11" r="1.5" fill="currentColor"/><circle cx="15.5" cy="11" r="1.5" fill="currentColor"/><path d="M12 17c2.21 0 4-1.79 4-4h-8c0 2.21 1.79 4 4 4z" fill="currentColor"/></svg>',
     requiresConversationId: true,
     extractConversationId: (url) => {
@@ -42,20 +39,7 @@ const PLATFORMS = {
       return match ? match[1] : null;
     }
   },
-  deepseek: {
-    name: 'DeepSeek',
-    domains: ['chat.deepseek.com', 'deepseek.com'],
-    icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M12 12l-7-3.5M12 12l7-3.5M12 12v8" stroke="currentColor" stroke-width="2"/></svg>',
-    requiresConversationId: false,
-    extractConversationId: () => null
-  },
-  gemini: {
-    name: 'Gemini',
-    domains: ['gemini.google.com'],
-    icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>',
-    requiresConversationId: false,
-    extractConversationId: () => null
-  }
+
 };
 
 // ============================================================================
@@ -74,7 +58,7 @@ const ERROR_TYPES = {
   UNSUPPORTED_PLATFORM: {
     message: 'This page is not supported',
     detail: 'Please navigate to a supported chat platform.',
-    troubleshooting: 'Supported platforms: ChatGPT, Claude, Copilot, DeepSeek, and Gemini.'
+    troubleshooting: 'Supported platforms: ChatGPT, Claude, and Copilot.'
   },
   NO_CONVERSATION_ID: {
     message: 'No conversation detected',
@@ -131,14 +115,7 @@ const PLATFORM_TROUBLESHOOTING = {
     noData: 'Try scrolling through the conversation to ensure all messages are loaded.',
     exportFailed: 'Try refreshing the page and waiting for the conversation to fully load before exporting.'
   },
-  deepseek: {
-    noData: 'Start a conversation first, then try exporting. Data is captured as you chat.',
-    exportFailed: 'Make sure you have sent at least one message in the conversation before exporting.'
-  },
-  gemini: {
-    noData: 'Make sure you have an active conversation with at least one message.',
-    exportFailed: 'Try refreshing the page and waiting for the conversation to fully load before exporting.'
-  }
+
 };
 
 // ============================================================================
@@ -202,11 +179,40 @@ const exportRateLimit = {
 };
 
 // ============================================================================
+// SHARED CONFIGURATION LOADING (from config/settings.js)
+// ============================================================================
+
+let EXTENSION_CONFIG = null;
+let getPlatformByUrl = null;
+
+/**
+ * Load the shared configuration module once and cache it.
+ * Must be called before any platform detection.
+ */
+async function loadConfigModule() {
+  if (EXTENSION_CONFIG && getPlatformByUrl) {
+    return;
+  }
+
+  const configUrl = browser.runtime.getURL('config/settings.js');
+  const module = await import(configUrl);
+
+  EXTENSION_CONFIG = module.EXTENSION_CONFIG;
+  getPlatformByUrl = module.getPlatformByUrl;
+
+  if (!EXTENSION_CONFIG || typeof getPlatformByUrl !== 'function') {
+    throw new Error('Configuration module did not export expected members');
+  }
+}
+
+
+// ============================================================================
 // PLATFORM DETECTION
 // ============================================================================
 
 /**
  * Detect platform from URL with scheme validation
+ * Uses shared EXTENSION_CONFIG via getPlatformByUrl for domain matching.
  * @param {string} url - The URL to check
  * @returns {Object|null} Platform object with id and config, or null if not supported
  */
@@ -229,18 +235,24 @@ function detectPlatform(url) {
       return null;
     }
 
-    for (const [platformId, platformConfig] of Object.entries(PLATFORMS)) {
-      if (platformConfig.domains.some(domain =>
-        hostname === domain || hostname.endsWith(`.${domain}`)
-      )) {
-        return {
-          id: platformId,
-          ...platformConfig
-        };
-      }
+    if (typeof getPlatformByUrl !== 'function') {
+      console.error('Configuration not loaded: getPlatformByUrl is not available');
+      return null;
     }
 
-    return null;
+    const basePlatform = getPlatformByUrl(url);
+    if (!basePlatform) {
+      return null;
+    }
+
+    const uiConfig = PLATFORMS[basePlatform.id] || {};
+
+    return {
+      ...basePlatform,
+      ...uiConfig,
+      id: basePlatform.id,
+      name: uiConfig.name || basePlatform.name
+    };
   } catch (error) {
     console.error('Error parsing URL:', error);
     return null;
@@ -933,7 +945,7 @@ async function checkAndUpdateUI() {
       return;
     }
 
-    // For API interception platforms (Claude, DeepSeek, Copilot without conversation ID)
+    // For API interception platforms (Claude, Copilot without conversation ID)
     // These platforms capture data via local client-side API interception
     if (platform.id === 'claude') {
       updateStatus(
@@ -950,22 +962,7 @@ async function checkAndUpdateUI() {
       } catch (e) {
         updateFilePreview('conversation');
       }
-    } else if (platform.id === 'deepseek') {
-      updateStatus(
-        'success',
-        'Ready to export DeepSeek conversation.',
-        'Data is captured locally as you chat. Click below to export.'
-      );
-      updateExportButton(true);
-      updateFilePreview('conversation');
-    } else if (platform.id === 'gemini') {
-      updateStatus(
-        'success',
-        'Ready to export Gemini conversation.',
-        'Click the button below to download as CSV.'
-      );
-      updateExportButton(true);
-      updateFilePreview('conversation');
+
     } else {
       // Fallback for any other platforms
       updateStatus(
@@ -1344,7 +1341,20 @@ function handleFocusDuringStateChange() {
 /**
  * Initialize popup UI
  */
-function init() {
+async function init() {
+  try {
+    // Load shared configuration before any platform detection
+    await loadConfigModule();
+  } catch (error) {
+    console.error('[Popup] Failed to load configuration module:', error);
+    updateStatus(
+      'error',
+      'Failed to initialize extension',
+      'Configuration could not be loaded. Please try reopening the popup.'
+    );
+    return;
+  }
+
   // Set up event listeners
   const exportBtn = document.getElementById('exportBtn');
   exportBtn.addEventListener('click', handleExportClick);
@@ -1415,8 +1425,6 @@ function verifyRuntimeIntegrity() {
   const criticalFunctions = [
     'detectPlatform',
     'sanitizeErrorMessage',
-    'sanitizeForCSV',
-    'validateURL',
     'checkRateLimit'
   ];
 
@@ -1439,4 +1447,8 @@ function verifyRuntimeIntegrity() {
 }
 
 // Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', () => {
+  init().catch(error => {
+    console.error('[Popup] Unhandled error during init:', error);
+  });
+});

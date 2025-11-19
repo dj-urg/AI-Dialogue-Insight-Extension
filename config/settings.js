@@ -1,19 +1,22 @@
 /**
  * General Settings and Configuration
- * 
+ *
  * Central configuration for the extension including:
  * - Supported platforms and their domains
  * - Extension metadata
  * - Default settings
  */
 
-const EXTENSION_CONFIG = {
+export const EXTENSION_CONFIG = {
   // Extension metadata
   name: 'AI Chat Exporter',
   version: '2.0.0',
-  description: 'Export conversations from ChatGPT, Claude, DeepSeek, Gemini, and Co-pilot to CSV. All processing happens locally in your browser.',
+  description:
+    'Export conversations from ChatGPT, Claude, and Co-pilot to CSV. All processing happens locally in your browser.',
 
   // Supported platforms
+  // IMPORTANT: Platform objects must NOT contain an 'id' property.
+  // The 'id' is always derived from the object key by getPlatformByUrl() and getEnabledPlatforms().
   platforms: {
     chatgpt: {
       name: 'ChatGPT',
@@ -30,20 +33,6 @@ const EXTENSION_CONFIG = {
       contentScript: 'platforms/claude/content.js',
       injectScript: 'platforms/claude/inject.js',
       backgroundHandler: 'ClaudeHandler'
-    },
-    deepseek: {
-      name: 'DeepSeek',
-      domains: ['chat.deepseek.com', 'deepseek.com'],
-      enabled: true,
-      contentScript: 'platforms/deepseek/content.js',
-      backgroundHandler: 'deepseek'
-    },
-    gemini: {
-      name: 'Gemini',
-      domains: ['gemini.google.com', 'bard.google.com'],
-      enabled: false, // Not implemented yet
-      contentScript: 'platforms/gemini/content.js',
-      backgroundHandler: 'gemini'
     },
     copilot: {
       name: 'Co-pilot',
@@ -70,48 +59,65 @@ const EXTENSION_CONFIG = {
 };
 
 /**
- * Get platform configuration by domain
- * @param {string} url - The URL to check
- * @returns {Object|null} Platform config or null if not supported
+ * @typedef {Object} PlatformDescriptor
+ * @property {string} id                     Platform identifier (e.g., 'chatgpt', 'claude')
+ * @property {string} name                   Platform display name
+ * @property {string[]} domains              Supported domains
+ * @property {boolean} enabled               Whether platform is enabled
+ * @property {string} contentScript          Path to content script
+ * @property {string} [injectScript]         Path to inject script (optional)
+ * @property {string} backgroundHandler      Background handler identifier
  */
-function getPlatformByUrl(url) {
+
+/**
+ * Check if a hostname matches a domain (exact or subdomain).
+ * @param {string} hostname - The hostname to check.
+ * @param {string} domain - The domain to match against.
+ * @returns {boolean} True if hostname matches domain or is a subdomain.
+ */
+function matchesDomain(hostname, domain) {
+  return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
+/**
+ * Get platform configuration by URL.
+ * @param {string} url - The URL to check.
+ * @returns {PlatformDescriptor | null} Platform config with id, or null if not supported.
+ */
+export function getPlatformByUrl(url) {
   try {
     const hostname = new URL(url).hostname;
-    
+
     for (const [platformId, platform] of Object.entries(EXTENSION_CONFIG.platforms)) {
       if (!platform.enabled) continue;
-      
-      if (platform.domains.some(domain => 
-        hostname === domain || hostname.endsWith(`.${domain}`)
-      )) {
-        return { id: platformId, ...platform };
+
+      if (platform.domains.some((domain) => matchesDomain(hostname, domain))) {
+        // SAFETY: id is added last so it always overrides any platform.id (if accidentally added).
+        return { ...platform, id: platformId };
       }
     }
-    
+
     return null;
   } catch (error) {
-    console.error('Error parsing URL:', error);
+    // Non-fatal: if url cannot be parsed, we just treat it as unsupported.
+    if (EXTENSION_CONFIG.debug.enabled) {
+      // eslint-disable-next-line no-console
+      console.error('Error parsing URL in getPlatformByUrl:', error);
+    }
     return null;
   }
 }
 
 /**
- * Get all enabled platforms
- * @returns {Array} Array of enabled platform configs
+ * Get all enabled platforms.
+ * @returns {PlatformDescriptor[]} Array of enabled platform configs with id.
  */
-function getEnabledPlatforms() {
+export function getEnabledPlatforms() {
   return Object.entries(EXTENSION_CONFIG.platforms)
-    .filter(([id, platform]) => platform.enabled)
-    .map(([id, platform]) => ({ id, ...platform }));
+    .filter(([, platform]) => platform.enabled)
+    .map(([id, platform]) => {
+      // id is added last so it always overrides any platform.id (if accidentally added).
+      return { ...platform, id };
+    });
 }
-
-// Export for use in other modules
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    EXTENSION_CONFIG,
-    getPlatformByUrl,
-    getEnabledPlatforms
-  };
-}
-
 

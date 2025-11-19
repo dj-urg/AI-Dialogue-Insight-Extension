@@ -1,11 +1,14 @@
 /**
  * AI Chat Exporter - ChatGPT Extractor Module
- * 
+ *
  * This module extracts ChatGPT conversation data from the JSON API response
  * and generates two CSV files:
  * - CSV A: Conversation metadata (one row per conversation)
  * - CSV B: Conversation messages (one row per message/node)
  */
+import { escapeCSVField } from '../../utils/csv.js';
+
+
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -274,32 +277,6 @@ function extractConversationMessages(conversationData) {
 // CSV GENERATION
 // ============================================================================
 
-/**
- * Escape CSV field (handle quotes, commas, newlines)
- * Also prevents CSV injection attacks
- */
-function escapeCSVField(value) {
-    if (value === null || value === undefined) return '';
-
-    let stringValue = String(value);
-
-    // Prevent CSV injection: sanitize values starting with dangerous characters
-    // These characters can trigger formula execution in Excel/LibreOffice/Google Sheets
-    // = (formula), + (formula), - (formula), @ (formula), \t (tab), \r (carriage return)
-    const dangerousChars = ['=', '+', '-', '@', '\t', '\r'];
-    if (dangerousChars.some(char => stringValue.startsWith(char))) {
-        // Prefix with single quote to treat as text
-        stringValue = "'" + stringValue;
-    }
-
-    // If field contains comma, quote, or newline, wrap in quotes and escape quotes
-    if (stringValue.includes(',') || stringValue.includes('"') ||
-        stringValue.includes('\n') || stringValue.includes('\r')) {
-        return '"' + stringValue.replace(/"/g, '""') + '"';
-    }
-
-    return stringValue;
-}
 
 /**
  * Generate CSV A: Conversation Metadata

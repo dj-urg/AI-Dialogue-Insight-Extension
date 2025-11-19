@@ -16,11 +16,7 @@ A Firefox extension that exports chats from ChatGPT and Claude into CSV files. A
 
 - **ChatGPT**: https://chatgpt.com/* and https://chat.openai.com/* (Fully supported)
 - **Claude**: https://claude.ai/chat/* (Fully supported)
-
-### Planned Platforms
-- **DeepSeek**: https://chat.deepseek.com/* (Coming soon)
-- **Gemini**: https://gemini.google.com/* (Coming soon)
-- **Copilot**: https://copilot.microsoft.com/* (Coming soon)
+- **Copilot**: https://copilot.microsoft.com/* and https://copilotstudio.microsoft.com/* (Fully supported)
 
 ## Installation
 
@@ -241,10 +237,9 @@ ai-chat-exporter/
 │       ├── content.js      # Claude content script
 │       └── inject.js       # Claude API interceptor
 ├── utils/
-│   ├── csv.js              # CSV generation utilities
-│   ├── flatten.js          # Object flattening utilities
+│   ├── csv.js              # CSV generation utilities used by runtime
 │   └── helpers.js          # General helper functions
-├── tests/                  # Test files and test data
+├── testing/                # Test files, helpers (including flatten utilities), and test data
 ├── icon.png                # Extension icon
 └── README.md               # This file
 ```
@@ -311,7 +306,7 @@ This extension uses a robust architecture for reliable data capture:
 
 Contributions are welcome! Areas for improvement:
 
-- Support for additional platforms (DeepSeek, Gemini, Copilot)
+- Support for additional platforms
 - Additional export formats (JSON, Markdown)
 - Automated testing improvements
 - Internationalization (i18n)
