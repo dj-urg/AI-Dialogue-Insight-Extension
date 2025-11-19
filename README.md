@@ -14,7 +14,7 @@ A Firefox extension that exports chats from ChatGPT and Claude into CSV files. A
 - **No dependencies**: Pure JavaScript with no external libraries
 - **Advanced ChatGPT support**: Exports both conversation metadata and full message history with support for thoughts, tools, and multimodal content
 - **Claude support**: Exports Claude conversations with full message history, content blocks, and parent-child relationships
-- **Copilot support**: Exports Copilot conversations with full message history, content blocks, and parent-child relationships
+- **Copilot support**: Exports Copilot conversations with full message history and content blocks
 
 ## Supported Platforms
 
@@ -187,7 +187,7 @@ All CSV files are UTF-8 encoded and follow RFC 4180 standards, making them compa
 2. Use "Data" → "From Text/CSV" instead of double-clicking the file
 3. Ensure UTF-8 encoding is selected
 
-### ChatGPT: "Failed to fetch conversation data" (404 error)
+### Error: "Failed to fetch conversation data" (404 error)
 
 **Cause**: The extension couldn't extract conversation data from the page or API.
 
@@ -195,33 +195,6 @@ All CSV files are UTF-8 encoded and follow RFC 4180 standards, making them compa
 1. **Refresh the page** - Make sure the conversation is fully loaded
 2. **Check you're logged in** - You must be logged into ChatGPT
 3. **Wait a moment** - Let the page fully load before clicking export
-4. **Use debug tool** - Open `CHATGPT_DEBUG_BOOKMARKLET.html` for detailed diagnostics
-5. **Manual extraction** - See `DEBUG_CHATGPT.md` for alternative methods
-
-**Debug in console (F12)**:
-- ✅ "Found conversation data in __NEXT_DATA__" - Working correctly
-- ⚠️ "Data not found on page, trying API fetch..." - Using fallback method
-- ❌ "API fetch also failed" - Both methods failed
-
-If both methods fail, ChatGPT may have changed their page structure. Use the manual extraction method in `DEBUG_CHATGPT.md`.
-
-### Claude: "No conversation data captured"
-
-**Cause**: The extension hasn't intercepted Claude API responses yet.
-
-**Solution**:
-1. **Refresh the page** - This triggers the API calls that the extension intercepts
-2. **Check console logs** - Open browser console (F12) and look for:
-   - ✅ "[Claude] Fetch interceptor installed" - Extension loaded correctly
-   - ✅ "[Claude] ✓ Captured conversation data" - Data captured successfully
-3. **Navigate within Claude** - Switch to another conversation and back
-4. **Verify URL** - Ensure you're on a URL matching `https://claude.ai/chat/*`
-
-**Debug checklist**:
-- Extension is enabled in `about:addons`
-- You're on a Claude conversation page (not the home page)
-- Browser console shows no errors
-- Content script is injected (check for "[Claude]" logs)
 
 ### Extension icon is grayed out or unresponsive
 
@@ -242,7 +215,7 @@ If you encounter extraction issues:
 
 1. Open an issue on the project repository
 2. Include:
-   - The platform (ChatGPT or Claude)
+   - The platform
    - The date when extraction stopped working
    - Browser console errors (if any)
    - Console logs showing "[Platform] Fetch interceptor installed" status
@@ -294,8 +267,9 @@ Contributions are welcome! Areas for improvement:
 
 - Support for additional platforms
 - Additional export formats (JSON, Markdown)
-- Automated testing improvements
 - Internationalization (i18n)
 - Chrome Web Store publication
 
+## Credits
 
+This tool was built with the assistance of AI agents using **Cursor**, **Kiro**, and **Antigravity**.
