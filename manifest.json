@@ -1,11 +1,21 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "AI Chat Exporter",
   "version": "2.0.0",
   "description": "Export conversations from ChatGPT, Claude, DeepSeek, Gemini, and Co-pilot to CSV. All processing happens locally in your browser.",
   "permissions": [
     "activeTab",
-    "downloads"
+    "downloads",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*",
+    "https://chat.deepseek.com/*",
+    "https://deepseek.com/*",
+    "https://copilot.microsoft.com/*",
+    "https://copilotstudio.microsoft.com/*"
   ],
   "content_scripts": [
     {
@@ -13,14 +23,39 @@
         "https://chatgpt.com/*",
         "https://chat.openai.com/*"
       ],
-      "js": ["platforms/chatgpt/content.js"],
+      "js": [
+        "platforms/chatgpt/inject.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": [
+        "platforms/chatgpt/content.js"
+      ],
       "run_at": "document_start"
     },
     {
       "matches": [
         "https://claude.ai/chat/*"
       ],
-      "js": ["platforms/claude/content.js"],
+      "js": [
+        "platforms/claude/inject.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://claude.ai/chat/*"
+      ],
+      "js": [
+        "platforms/claude/content.js"
+      ],
       "run_at": "document_start"
     },
     {
@@ -28,7 +63,9 @@
         "https://chat.deepseek.com/*",
         "https://deepseek.com/*"
       ],
-      "js": ["platforms/deepseek/content.js"],
+      "js": [
+        "platforms/deepseek/content.js"
+      ],
       "run_at": "document_idle"
     },
     {
@@ -36,18 +73,30 @@
         "https://copilot.microsoft.com/*",
         "https://copilotstudio.microsoft.com/*"
       ],
-      "js": ["platforms/copilot/content.js"],
+      "js": [
+        "platforms/copilot/inject.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://copilot.microsoft.com/*",
+        "https://copilotstudio.microsoft.com/*"
+      ],
+      "js": [
+        "platforms/copilot/content.js"
+      ],
       "run_at": "document_start"
     }
   ],
   "background": {
     "scripts": [
-      "platforms/chatgpt/extractor.js",
       "background.js"
     ],
-    "persistent": false
+    "type": "module"
   },
-  "browser_action": {
+  "action": {
     "default_title": "Export Chat",
     "default_popup": "popup.html",
     "default_icon": {
@@ -57,10 +106,7 @@
   "icons": {
     "48": "icon.png"
   },
-  "web_accessible_resources": [
-    "platforms/chatgpt/inject.js",
-    "platforms/claude/inject.js",
-    "platforms/copilot/inject.js"
-  ],
-  "content_security_policy": "script-src 'self'; object-src 'none';"
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none';"
+  }
 }

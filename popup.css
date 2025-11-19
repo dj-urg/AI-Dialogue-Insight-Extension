@@ -748,6 +748,71 @@ strong {
 }
 
 /* ============================================
+   FILE PREVIEW COMPONENT (BEM)
+   ============================================ */
+
+.file-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  /* Flexible padding that adapts to viewport size */
+  padding: clamp(var(--space-sm), 2.5vw, var(--space-md));
+  margin-bottom: clamp(var(--space-md), 3vw, var(--space-lg));
+  border-radius: var(--radius-md);
+  background-color: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
+  /* Smooth animation when shown */
+  animation: slideDown var(--transition-base) ease-out;
+}
+
+.file-preview__icon {
+  flex-shrink: 0;
+  color: var(--color-info);
+  width: 16px;
+  height: 16px;
+}
+
+.file-preview__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.file-preview__name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  /* Allow text to wrap on narrow viewports */
+  word-break: break-word;
+  /* Truncate with ellipsis if too long */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Show full name on hover */
+  white-space: nowrap;
+}
+
+/* Show full filename on hover for long names */
+.file-preview__name:hover {
+  white-space: normal;
+  word-break: break-all;
+}
+
+/* Responsive adjustments for narrow viewports */
+@media (max-width: 360px) {
+  .file-preview {
+    padding: var(--space-sm);
+    margin-bottom: var(--space-md);
+    flex-wrap: wrap;
+  }
+
+  .file-preview__label,
+  .file-preview__name {
+    font-size: var(--font-size-xs);
+  }
+}
+
+/* ============================================
    INFO SECTION COMPONENT (BEM)
    ============================================ */
 
@@ -973,7 +1038,12 @@ a:focus-visible {
     padding: var(--space-sm);
     margin-bottom: var(--space-md);
   }
-  
+
+  .file-preview {
+    padding: var(--space-sm);
+    margin-bottom: var(--space-md);
+  }
+
   .info-section {
     margin-top: var(--space-md);
   }
@@ -1020,7 +1090,12 @@ a:focus-visible {
     padding: var(--space-md);
     margin-bottom: var(--space-lg);
   }
-  
+
+  .file-preview {
+    padding: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+
   .info-section {
     margin-top: var(--space-lg);
   }

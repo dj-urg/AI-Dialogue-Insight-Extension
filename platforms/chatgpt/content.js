@@ -18,38 +18,23 @@
   const capturedConversations = new Map();
 
   /**
-   * Inject inject.js into the page context
-   */
-  function injectPageScript() {
-    try {
-      const script = document.createElement('script');
-      script.src = browser.runtime.getURL('platforms/chatgpt/inject.js');
-      script.onload = function () {
-        this.remove();
-        console.log(`[${PLATFORM}] Page script injected successfully`);
-      };
-      script.onerror = function () {
-        console.error(`[${PLATFORM}] Failed to inject page script`);
-      };
-
-      (document.head || document.documentElement).appendChild(script);
-    } catch (error) {
-      console.error(`[${PLATFORM}] Error injecting page script:`, error);
-    }
-  }
-
-  /**
    * Listen for messages from the injected page script
    */
   window.addEventListener('message', event => {
     // Only accept messages from the same window
     if (event.source !== window) return;
 
+    // Debug log for relevant messages
+    if (event.data && (event.data.type === MESSAGE_TYPE || event.data.source === SOURCE_ID)) {
+      console.log(`[${PLATFORM}] Received message in content script`, event.data);
+    }
+
     // Only accept our specific message type
     if (!event.data || event.data.type !== MESSAGE_TYPE) return;
 
     // Verify source
     if (event.data.source !== SOURCE_ID) {
+      console.warn(`[${PLATFORM}] Message source mismatch:`, event.data.source);
       return;
     }
 
@@ -97,9 +82,15 @@
     if (sender.id !== browser.runtime.id) return;
 
     if (message.type === 'GET_CAPTURED_CONVERSATIONS') {
+      const conversations = Array.from(capturedConversations.entries()).map(([id, data]) => ({
+        id,
+        title: data.title || 'Untitled Conversation'
+      }));
+
       sendResponse({
         success: true,
-        conversationIds: Array.from(capturedConversations.keys()),
+        conversations: conversations,
+        conversationIds: conversations.map(c => c.id), // Keep for backward compatibility
         platform: 'chatgpt'
       });
       return false;
@@ -136,13 +127,6 @@
 
     return false;
   });
-
-  // Inject the page script when content script loads
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', injectPageScript);
-  } else {
-    injectPageScript();
-  }
 
   console.log(`[${PLATFORM}] Content script loaded`);
 

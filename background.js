@@ -5,14 +5,10 @@
  * and manages CSV generation and downloads
  */
 
-// Platform handlers (loaded via script tags in manifest)
+import { extractChatGPTConversation } from './platforms/chatgpt/extractor.js';
+
+// Platform handlers
 const platformHandlers = {};
-
-/**
- * ChatGPT Platform Handler
- * Handles ChatGPT-specific conversation data processing
- */
-
 
 /**
  * Claude Platform Handler
@@ -78,11 +74,6 @@ const ClaudeHandler = {
     return rows;
   }
 };
-
-// Make ClaudeHandler accessible globally
-if (typeof window !== 'undefined') {
-  window.ClaudeHandler = ClaudeHandler;
-}
 
 /**
  * Copilot Platform Handler
@@ -157,11 +148,6 @@ const CopilotHandler = {
     return rows;
   }
 };
-
-// Make CopilotHandler accessible globally
-if (typeof window !== 'undefined') {
-  window.CopilotHandler = CopilotHandler;
-}
 
 /**
  * CSV Utility Functions (from utils/csv.js)
@@ -347,6 +333,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   // Validate sender
   if (sender.id !== browser.runtime.id) return;
 
+
   // Handle ChatGPT conversation data
   if (message.type === 'CHATGPT_CONVERSATION_DATA') {
     handleConversationData({
@@ -380,4 +367,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
   return false;
 });
 
-console.log('AI Chat Exporter: Main background script loaded');
+console.log('AI Chat Exporter: Main background script loaded at ' + new Date().toISOString());
+
+// Global error handler
+self.addEventListener('unhandledrejection', event => {
+  console.error('[Background] Unhandled rejection:', event.reason);
+});

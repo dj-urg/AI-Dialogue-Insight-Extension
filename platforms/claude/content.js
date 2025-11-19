@@ -18,27 +18,6 @@
   const capturedConversations = new Map();
 
   /**
-   * Inject inject.js into the page context
-   */
-  function injectPageScript() {
-    try {
-      const script = document.createElement('script');
-      script.src = browser.runtime.getURL('platforms/claude/inject.js');
-      script.onload = function () {
-        this.remove();
-        console.log(`[${PLATFORM}] Page script injected successfully`);
-      };
-      script.onerror = function () {
-        console.error(`[${PLATFORM}] Failed to inject page script`);
-      };
-
-      (document.head || document.documentElement).appendChild(script);
-    } catch (error) {
-      console.error(`[${PLATFORM}] Error injecting page script:`, error);
-    }
-  }
-
-  /**
    * Listen for messages from the injected page script
    */
   window.addEventListener('message', event => {
@@ -98,9 +77,15 @@
     if (sender.id !== browser.runtime.id) return;
 
     if (message.type === 'GET_CAPTURED_CONVERSATIONS') {
+      const conversations = Array.from(capturedConversations.entries()).map(([id, data]) => ({
+        id,
+        title: data.name || 'Untitled Conversation'
+      }));
+
       sendResponse({
         success: true,
-        conversationIds: Array.from(capturedConversations.keys()),
+        conversations: conversations,
+        conversationIds: conversations.map(c => c.id), // Keep for backward compatibility
         platform: 'claude'
       });
       return false;
@@ -137,13 +122,6 @@
 
     return false;
   });
-
-  // Inject the page script when content script loads
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', injectPageScript);
-  } else {
-    injectPageScript();
-  }
 
   console.log(`[${PLATFORM}] Content script loaded`);
 

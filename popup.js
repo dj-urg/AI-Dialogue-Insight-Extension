@@ -26,8 +26,11 @@ const PLATFORMS = {
     name: 'Claude',
     domains: ['claude.ai'],
     icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17.5 3.5L14 10l3.5 6.5L21 10l-3.5-6.5z" fill="currentColor"/><path d="M10 3.5L6.5 10 10 16.5 13.5 10 10 3.5z" fill="currentColor"/><path d="M6.5 10L3 16.5 6.5 23 10 16.5 6.5 10z" fill="currentColor"/></svg>',
-    requiresConversationId: false,
-    extractConversationId: () => null
+    requiresConversationId: true,
+    extractConversationId: (url) => {
+      const match = url.match(/\/chat\/([a-f0-9-]+)/i);
+      return match ? match[1] : null;
+    }
   },
   copilot: {
     name: 'Copilot',
@@ -149,24 +152,24 @@ const state = {
     name: null,
     conversationId: null
   },
-  
+
   // Status information
   status: {
     type: 'info', // 'success' | 'warning' | 'error' | 'loading' | 'info'
     message: '',
     detail: ''
   },
-  
+
   // Export state
   export: {
     isExporting: false,
     canExport: false,
     lastError: null
   },
-  
+
   // Current tab information
   currentTab: null,
-  
+
   // Polling state
   polling: {
     intervalId: null,
@@ -188,18 +191,18 @@ const state = {
 function detectPlatform(url) {
   try {
     const hostname = new URL(url).hostname;
-    
+
     for (const [platformId, platformConfig] of Object.entries(PLATFORMS)) {
-      if (platformConfig.domains.some(domain => 
+      if (platformConfig.domains.some(domain =>
         hostname === domain || hostname.endsWith(`.${domain}`)
       )) {
-        return { 
-          id: platformId, 
-          ...platformConfig 
+        return {
+          id: platformId,
+          ...platformConfig
         };
       }
     }
-    
+
     return null;
   } catch (error) {
     console.error('Error parsing URL:', error);
@@ -217,7 +220,7 @@ function checkConversationId(platform, url) {
   if (!platform || !platform.requiresConversationId) {
     return { hasConversationId: true, conversationId: null };
   }
-  
+
   const conversationId = platform.extractConversationId(url);
   return {
     hasConversationId: conversationId !== null,
@@ -236,21 +239,21 @@ function checkConversationId(platform, url) {
  */
 function sanitizeErrorMessage(message) {
   if (!message) return 'An error occurred';
-  
+
   // Remove potential conversation IDs (UUIDs and similar patterns)
   let sanitized = message.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '[conversation-id]');
-  
+
   // Remove potential API keys or tokens
   sanitized = sanitized.replace(/[a-zA-Z0-9_-]{20,}/g, '[token]');
-  
+
   // Remove URLs that might contain sensitive query parameters
   sanitized = sanitized.replace(/https?:\/\/[^\s]+/g, '[url]');
-  
+
   // Truncate very long messages
   if (sanitized.length > 200) {
     sanitized = sanitized.substring(0, 197) + '...';
   }
-  
+
   return sanitized;
 }
 
@@ -264,24 +267,24 @@ function logError(context, error, additionalInfo = {}) {
   const timestamp = new Date().toISOString();
   const errorMessage = error instanceof Error ? error.message : error;
   const errorStack = error instanceof Error ? error.stack : null;
-  
+
   console.group(`🔴 Error in ${context} [${timestamp}]`);
   console.error('Message:', errorMessage);
-  
+
   if (errorStack) {
     console.error('Stack:', errorStack);
   }
-  
+
   if (Object.keys(additionalInfo).length > 0) {
     console.error('Additional Info:', additionalInfo);
   }
-  
+
   console.error('Current State:', {
     platform: state.platform,
     export: state.export,
     status: state.status
   });
-  
+
   console.groupEnd();
 }
 
@@ -293,14 +296,14 @@ function logError(context, error, additionalInfo = {}) {
  */
 function logDebug(context, message, additionalInfo = {}) {
   const timestamp = new Date().toISOString();
-  
+
   console.group(`ℹ️ ${context} [${timestamp}]`);
   console.log('Message:', message);
-  
+
   if (Object.keys(additionalInfo).length > 0) {
     console.log('Details:', additionalInfo);
   }
-  
+
   console.groupEnd();
 }
 
@@ -314,7 +317,7 @@ function getPlatformTroubleshooting(platformId, errorType) {
   if (!platformId || !PLATFORM_TROUBLESHOOTING[platformId]) {
     return null;
   }
-  
+
   return PLATFORM_TROUBLESHOOTING[platformId][errorType] || null;
 }
 
@@ -330,7 +333,7 @@ function getPlatformTroubleshooting(platformId, errorType) {
 function displayError(errorType, options = {}) {
   const errorConfig = ERROR_TYPES[errorType] || ERROR_TYPES.UNKNOWN_ERROR;
   const { platformId, customDetail, customTroubleshooting, originalError } = options;
-  
+
   // Log detailed error for debugging
   if (originalError) {
     logError(errorType, originalError, {
@@ -340,13 +343,13 @@ function displayError(errorType, options = {}) {
       customTroubleshooting
     });
   }
-  
+
   // Determine detail message
   let detailMessage = customDetail || errorConfig.detail;
-  
+
   // Determine troubleshooting tip
   let troubleshootingTip = customTroubleshooting || errorConfig.troubleshooting;
-  
+
   // Get platform-specific troubleshooting if available
   if (platformId && !troubleshootingTip) {
     const errorTypeKey = errorType.toLowerCase().replace(/_/g, '');
@@ -358,16 +361,16 @@ function displayError(errorType, options = {}) {
       troubleshootingTip = getPlatformTroubleshooting(platformId, 'exportFailed');
     }
   }
-  
+
   // Combine detail and troubleshooting
   let fullDetail = detailMessage;
   if (troubleshootingTip) {
     fullDetail = `${detailMessage} ${troubleshootingTip}`;
   }
-  
+
   // Update UI with error
   updateStatus('error', errorConfig.message, fullDetail);
-  
+
   // Store error in state for potential retry logic
   state.export.lastError = {
     type: errorType,
@@ -375,7 +378,7 @@ function displayError(errorType, options = {}) {
     detail: fullDetail,
     timestamp: Date.now()
   };
-  
+
   // Ensure export button is enabled for retry (unless it's a permanent error)
   const permanentErrors = ['UNSUPPORTED_PLATFORM', 'PERMISSION_DENIED'];
   if (!permanentErrors.includes(errorType)) {
@@ -400,12 +403,12 @@ function displayError(errorType, options = {}) {
  */
 function updatePlatformBadge(platform) {
   const platformBadge = document.getElementById('platformBadge');
-  
+
   if (!platform) {
     platformBadge.innerHTML = '';
     return;
   }
-  
+
   const badgeHTML = `
     <div class="platform-badge platform-badge--${platform.id}">
       <div class="platform-badge__icon" aria-hidden="true">
@@ -414,7 +417,7 @@ function updatePlatformBadge(platform) {
       <span class="platform-badge__name">${platform.name}</span>
     </div>
   `;
-  
+
   platformBadge.innerHTML = badgeHTML;
 }
 
@@ -428,34 +431,34 @@ function updateStatus(type, message, detail = '') {
   const statusCard = document.querySelector('.status-card');
   const statusMessage = document.getElementById('statusMessage');
   const statusDetail = document.getElementById('statusDetail');
-  
+
   // Store current focus to maintain it during update
   const activeElement = document.activeElement;
   const activeElementId = activeElement?.id;
-  
+
   // Validate status type
   const validTypes = ['success', 'warning', 'error', 'loading', 'info'];
   if (!validTypes.includes(type)) {
     console.error(`Invalid status type: ${type}. Using 'info' as fallback.`);
     type = 'info';
   }
-  
+
   // Check if status has actually changed (efficient DOM updates)
-  const hasChanged = 
+  const hasChanged =
     state.status.type !== type ||
     state.status.message !== message ||
     state.status.detail !== (detail || '');
-  
+
   // Skip update if nothing changed
   if (!hasChanged) {
     return;
   }
-  
+
   // Update state
   state.status.type = type;
   state.status.message = message;
   state.status.detail = detail || '';
-  
+
   // Update status card styling based on status type (only if changed)
   const expectedClass = `status-card--${type}`;
   if (!statusCard.classList.contains(expectedClass)) {
@@ -464,22 +467,22 @@ function updateStatus(type, message, detail = '') {
     // Add the new status modifier class
     statusCard.classList.add(expectedClass);
   }
-  
+
   // Update status message text (only if changed)
   if (statusMessage.textContent !== message) {
     statusMessage.textContent = message;
   }
-  
+
   // Update status detail text (only if changed)
   const newDetail = detail || '';
   if (statusDetail.textContent !== newDetail) {
     statusDetail.textContent = newDetail;
   }
-  
+
   // Ensure ARIA live region announcements work properly
   // aria-atomic="true" ensures the entire status card content is announced
   statusCard.setAttribute('aria-atomic', 'true');
-  
+
   // Set aria-live to "polite" for non-critical updates, "assertive" for errors
   // This ensures screen readers announce status changes appropriately
   if (type === 'error') {
@@ -487,7 +490,7 @@ function updateStatus(type, message, detail = '') {
   } else {
     statusCard.setAttribute('aria-live', 'polite');
   }
-  
+
   // Restore focus if it was on an interactive element
   if (activeElementId && activeElement && activeElement.tagName !== 'BODY') {
     requestAnimationFrame(() => {
@@ -497,7 +500,7 @@ function updateStatus(type, message, detail = '') {
       }
     });
   }
-  
+
   // Log status update for debugging
   console.log(`Status updated: [${type}] ${message}${detail ? ' - ' + detail : ''}`);
 }
@@ -512,36 +515,36 @@ function updateExportButton(enabled, text = null, showSpinner = false) {
   const exportBtn = document.getElementById('exportBtn');
   const buttonText = exportBtn.querySelector('.btn__text');
   const buttonIcon = exportBtn.querySelector('.btn__icon');
-  
+
   // Store focus state before update
   const wasFocused = document.activeElement === exportBtn;
-  
+
   // Check if button state has actually changed (efficient DOM updates)
   const hasStateChanged = state.export.canExport !== enabled;
   const currentText = buttonText ? buttonText.textContent : '';
   const targetText = text || 'Export to CSV';
   const hasTextChanged = currentText !== targetText;
   const hasSpinnerChanged = buttonIcon.classList.contains('spinner') !== showSpinner;
-  
+
   // Update state
   const previousCanExport = state.export.canExport;
   state.export.canExport = enabled;
-  
+
   // Stop polling when export button becomes enabled
   if (enabled && !previousCanExport) {
     stopPolling();
   }
-  
+
   // Update DOM only if changed
   if (hasStateChanged) {
     exportBtn.disabled = !enabled;
   }
-  
+
   // Update button text only if changed
   if (hasTextChanged && buttonText) {
     buttonText.textContent = targetText;
   }
-  
+
   // Show/hide spinner in button only if changed
   if (hasSpinnerChanged) {
     if (showSpinner) {
@@ -561,12 +564,38 @@ function updateExportButton(enabled, text = null, showSpinner = false) {
       buttonIcon.classList.remove('spinner');
     }
   }
-  
+
   // Restore focus if button was focused before update
   if (wasFocused && !exportBtn.disabled) {
     requestAnimationFrame(() => {
       exportBtn.focus();
     });
+  }
+}
+
+/**
+ * Update file preview with filename
+ * @param {string} title - Conversation title
+ */
+function updateFilePreview(title) {
+  const filePreview = document.getElementById('filePreview');
+  const fileName = document.getElementById('fileName');
+
+  // Sanitize title for filename
+  const sanitizedTitle = (title || 'conversation').replace(/[^a-z0-9\u00a0-\uffff_-]/gi, '_').trim();
+  const finalName = sanitizedTitle ? `${sanitizedTitle}.csv` : 'conversation.csv';
+
+  fileName.textContent = finalName;
+  filePreview.style.display = 'flex';
+}
+
+/**
+ * Hide file preview
+ */
+function hideFilePreview() {
+  const filePreview = document.getElementById('filePreview');
+  if (filePreview) {
+    filePreview.style.display = 'none';
   }
 }
 
@@ -583,19 +612,19 @@ function startPolling(interval = 3000) {
   if (state.polling.isPolling) {
     return;
   }
-  
+
   state.polling.isPolling = true;
-  
+
   // Clear any existing interval
   if (state.polling.intervalId) {
     clearInterval(state.polling.intervalId);
   }
-  
+
   // Set up new polling interval
   state.polling.intervalId = setInterval(() => {
     debouncedCheckAndUpdateUI();
   }, interval);
-  
+
   console.log(`Polling started with ${interval}ms interval`);
 }
 
@@ -606,20 +635,20 @@ function stopPolling() {
   if (!state.polling.isPolling) {
     return;
   }
-  
+
   state.polling.isPolling = false;
-  
+
   if (state.polling.intervalId) {
     clearInterval(state.polling.intervalId);
     state.polling.intervalId = null;
   }
-  
+
   // Clear any pending debounce timeout
   if (state.polling.debounceTimeout) {
     clearTimeout(state.polling.debounceTimeout);
     state.polling.debounceTimeout = null;
   }
-  
+
   console.log('Polling stopped');
 }
 
@@ -632,12 +661,12 @@ function debouncedCheckAndUpdateUI() {
   if (state.polling.debounceTimeout) {
     clearTimeout(state.polling.debounceTimeout);
   }
-  
+
   // Set new debounce timeout
   state.polling.debounceTimeout = setTimeout(() => {
     const now = Date.now();
     const timeSinceLastUpdate = now - state.polling.lastUpdateTime;
-    
+
     // Ensure minimum 200ms between actual updates
     if (timeSinceLastUpdate >= 200) {
       state.polling.lastUpdateTime = now;
@@ -655,24 +684,39 @@ function debouncedCheckAndUpdateUI() {
  * @param {Object} tab - Browser tab object
  * @param {Object} platform - Platform object
  * @param {string} conversationId - Conversation ID
- * @returns {Promise<boolean>} Whether data is available
+ * @returns {Promise<Object>} Object with hasData boolean and optional title
  */
 async function checkConversationData(tab, platform, conversationId) {
   try {
-    const response = await browser.tabs.sendMessage(tab.id, { 
-      type: 'GET_CAPTURED_CONVERSATIONS' 
+    const response = await browser.tabs.sendMessage(tab.id, {
+      type: 'GET_CAPTURED_CONVERSATIONS'
     });
-    
-    if (response && response.success && response.conversationIds) {
-      return response.conversationIds.includes(conversationId);
+
+    if (response && response.success) {
+      // New format with conversations array
+      if (response.conversations) {
+        const conversation = response.conversations.find(c => c.id === conversationId);
+        return {
+          hasData: !!conversation,
+          title: conversation ? conversation.title : null
+        };
+      }
+
+      // Backward compatibility
+      if (response.conversationIds) {
+        return {
+          hasData: response.conversationIds.includes(conversationId),
+          title: null
+        };
+      }
     }
-    
-    // If no response or no conversation IDs, assume data is available
-    return true;
+
+    // If no response or no conversation IDs, assume data is available but unknown title
+    return { hasData: true, title: null };
   } catch (error) {
     // If content script not responding, assume data is available
     console.log('Content script not responding, assuming data available');
-    return true;
+    return { hasData: true, title: null };
   }
 }
 
@@ -682,7 +726,7 @@ async function checkConversationData(tab, platform, conversationId) {
 async function checkAndUpdateUI() {
   try {
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-    
+
     if (tabs.length === 0) {
       displayError('NO_ACTIVE_TAB');
       updatePlatformBadge(null);
@@ -691,16 +735,16 @@ async function checkAndUpdateUI() {
 
     const tab = tabs[0];
     const url = tab.url || '';
-    
+
     // Store current tab in state
     state.currentTab = tab;
-    
+
     // Detect platform
     const platform = detectPlatform(url);
-    
+
     // Update platform badge
     updatePlatformBadge(platform);
-    
+
     // Update state
     state.platform.id = platform ? platform.id : null;
     state.platform.name = platform ? platform.name : null;
@@ -713,7 +757,7 @@ async function checkAndUpdateUI() {
     // Check if platform requires conversation ID
     const { hasConversationId, conversationId } = checkConversationId(platform, url);
     state.platform.conversationId = conversationId;
-    
+
     // Platform-specific status logic
     if (platform.requiresConversationId && !hasConversationId) {
       // ChatGPT or Copilot without conversation ID
@@ -727,8 +771,8 @@ async function checkAndUpdateUI() {
     // For platforms that require conversation ID (ChatGPT, Copilot)
     if (platform.requiresConversationId && conversationId) {
       try {
-        const hasData = await checkConversationData(tab, platform, conversationId);
-        
+        const { hasData, title } = await checkConversationData(tab, platform, conversationId);
+
         if (hasData) {
           // Data is ready for export
           updateStatus(
@@ -737,6 +781,7 @@ async function checkAndUpdateUI() {
             'Click the button below to download as CSV.'
           );
           updateExportButton(true);
+          updateFilePreview(title || 'conversation');
         } else {
           // Waiting for conversation data to load
           updateStatus(
@@ -745,6 +790,7 @@ async function checkAndUpdateUI() {
             'Please wait while the conversation loads.'
           );
           updateExportButton(false);
+          hideFilePreview();
         }
       } catch (error) {
         // Content script might not be loaded yet
@@ -753,6 +799,7 @@ async function checkAndUpdateUI() {
           platformId: platform.id,
           originalError: error
         });
+        hideFilePreview();
       }
       return;
     }
@@ -766,6 +813,14 @@ async function checkAndUpdateUI() {
         'Data is captured locally as you chat. Click below to export.'
       );
       updateExportButton(true);
+
+      // Try to get title for Claude if available
+      try {
+        const { title } = await checkConversationData(tab, platform, state.platform.conversationId);
+        updateFilePreview(title || 'conversation');
+      } catch (e) {
+        updateFilePreview('conversation');
+      }
     } else if (platform.id === 'deepseek') {
       updateStatus(
         'success',
@@ -773,6 +828,7 @@ async function checkAndUpdateUI() {
         'Data is captured locally as you chat. Click below to export.'
       );
       updateExportButton(true);
+      updateFilePreview('conversation');
     } else if (platform.id === 'gemini') {
       updateStatus(
         'success',
@@ -780,6 +836,7 @@ async function checkAndUpdateUI() {
         'Click the button below to download as CSV.'
       );
       updateExportButton(true);
+      updateFilePreview('conversation');
     } else {
       // Fallback for any other platforms
       updateStatus(
@@ -788,6 +845,7 @@ async function checkAndUpdateUI() {
         'Click the button below to download as CSV.'
       );
       updateExportButton(true);
+      updateFilePreview('conversation');
     }
   } catch (error) {
     logError('checkAndUpdateUI', error);
@@ -811,23 +869,23 @@ async function handleExportClick() {
     logError('handleExportClick', 'Export already in progress', { isExporting: true });
     return;
   }
-  
+
   state.export.isExporting = true;
   state.export.lastError = null; // Clear previous error
-  
+
   // Show loading state with spinner in button
   updateExportButton(false, 'Exporting...', true);
   updateStatus('loading', 'Exporting conversation...', 'Please wait.');
 
   try {
     const tab = state.currentTab;
-    
+
     if (!tab) {
       throw new Error('NO_ACTIVE_TAB');
     }
 
     const platform = detectPlatform(tab.url);
-    
+
     if (!platform) {
       throw new Error('UNSUPPORTED_PLATFORM');
     }
@@ -837,15 +895,15 @@ async function handleExportClick() {
       type: 'EXPORT_CONVERSATION',
       platform: platform.id
     };
-    
+
     // Add conversation ID if required
     if (platform.requiresConversationId) {
       const conversationId = state.platform.conversationId;
-      
+
       if (!conversationId) {
         throw new Error('NO_CONVERSATION_ID');
       }
-      
+
       exportMessage.conversationId = conversationId;
     }
 
@@ -865,7 +923,7 @@ async function handleExportClick() {
         platform: platform.id,
         messageType: 'EXPORT_CONVERSATION'
       });
-      
+
       // Determine specific error type
       if (messageError.message && messageError.message.includes('Receiving end does not exist')) {
         throw new Error('CONTENT_SCRIPT_NOT_LOADED');
@@ -875,23 +933,23 @@ async function handleExportClick() {
         throw new Error('NETWORK_ERROR');
       }
     }
-    
+
     if (response && response.success) {
       // Export successful
       logDebug('handleExportClick', 'Export completed successfully', {
         platform: platform.id,
         conversationId: exportMessage.conversationId
       });
-      
+
       updateStatus(
         'success',
         'Export complete!',
         'Check your Downloads folder.'
       );
-      
+
       // Reset button to normal state (no spinner)
       updateExportButton(false, 'Export to CSV', false);
-      
+
       // Auto-close after 2 seconds
       setTimeout(() => {
         window.close();
@@ -900,16 +958,16 @@ async function handleExportClick() {
       // Export failed with error from content script
       const errorMessage = response?.error || 'Unknown error occurred';
       const sanitizedError = sanitizeErrorMessage(errorMessage);
-      
+
       logError('handleExportClick', `Export failed: ${errorMessage}`, {
         platform: platform.id,
         response
       });
-      
+
       // Check for specific error patterns
-      if (errorMessage.toLowerCase().includes('no data') || 
-          errorMessage.toLowerCase().includes('no conversation') ||
-          errorMessage.toLowerCase().includes('empty')) {
+      if (errorMessage.toLowerCase().includes('no data') ||
+        errorMessage.toLowerCase().includes('no conversation') ||
+        errorMessage.toLowerCase().includes('empty')) {
         throw new Error('NO_DATA_AVAILABLE');
       } else {
         throw new Error(`EXPORT_FAILED:${sanitizedError}`);
@@ -917,13 +975,13 @@ async function handleExportClick() {
     }
   } catch (error) {
     const errorMessage = error.message || 'UNKNOWN_ERROR';
-    
+
     // Reset export state
     state.export.isExporting = false;
-    
+
     // Reset button to normal state (remove spinner)
     updateExportButton(true, 'Export to CSV', false);
-    
+
     // Handle specific error types
     if (errorMessage === 'NO_ACTIVE_TAB') {
       displayError('NO_ACTIVE_TAB', { originalError: error });
@@ -984,13 +1042,13 @@ async function handleExportClick() {
  */
 function handleKeyboardNavigation(event) {
   const target = event.target;
-  
+
   // Handle Enter and Space keys on buttons (native behavior, but ensure consistency)
   if (target.tagName === 'BUTTON' && (event.key === 'Enter' || event.key === ' ')) {
     event.preventDefault();
     target.click();
   }
-  
+
   // Handle Enter and Space keys on summary elements (native behavior, but ensure consistency)
   if (target.tagName === 'SUMMARY' && (event.key === 'Enter' || event.key === ' ')) {
     // Native behavior handles this, but we can add custom logic if needed
@@ -1004,12 +1062,12 @@ function handleKeyboardNavigation(event) {
  */
 function maintainFocus() {
   const activeElement = document.activeElement;
-  
+
   // If focus is on an element that's about to be updated, maintain focus
   if (activeElement && activeElement.id) {
     // Store the focused element ID
     const focusedId = activeElement.id;
-    
+
     // After DOM updates, restore focus if the element still exists
     requestAnimationFrame(() => {
       const element = document.getElementById(focusedId);
@@ -1032,12 +1090,12 @@ function verifyNoKeyboardTraps() {
   const focusableElements = document.querySelectorAll(
     'button:not([disabled]), summary, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
   );
-  
+
   if (focusableElements.length === 0) {
     console.warn('No focusable elements found');
     return false;
   }
-  
+
   // Check that all focusable elements are reachable
   let allReachable = true;
   focusableElements.forEach((element, index) => {
@@ -1046,7 +1104,7 @@ function verifyNoKeyboardTraps() {
     if (style.display === 'none' || style.visibility === 'hidden') {
       return; // Skip hidden elements
     }
-    
+
     // Check if element has proper tabindex
     const tabindex = element.getAttribute('tabindex');
     if (tabindex && parseInt(tabindex) < 0) {
@@ -1054,7 +1112,7 @@ function verifyNoKeyboardTraps() {
       allReachable = false;
     }
   });
-  
+
   console.log(`Keyboard navigation check: ${focusableElements.length} focusable elements found`);
   return allReachable;
 }
@@ -1068,21 +1126,21 @@ function setupTabOrder() {
   const exportBtn = document.getElementById('exportBtn');
   const infoSection = document.getElementById('infoSection');
   const infoToggle = infoSection?.querySelector('summary');
-  
+
   // Ensure elements have proper tabindex (0 for natural tab order)
   // Native elements like button and summary already have proper tab order
   // This is just a verification step
-  
+
   if (exportBtn) {
     // Button already has natural tab order
     exportBtn.setAttribute('tabindex', '0');
   }
-  
+
   if (infoToggle) {
     // Summary already has natural tab order
     infoToggle.setAttribute('tabindex', '0');
   }
-  
+
   console.log('Tab order configured for keyboard navigation');
 }
 
@@ -1094,7 +1152,7 @@ function handleFocusDuringStateChange() {
   // Store the currently focused element before state change
   const activeElement = document.activeElement;
   const activeElementId = activeElement?.id;
-  
+
   // Return a function to restore focus after state change
   return () => {
     if (activeElementId) {
@@ -1118,19 +1176,19 @@ function init() {
   // Set up event listeners
   const exportBtn = document.getElementById('exportBtn');
   exportBtn.addEventListener('click', handleExportClick);
-  
+
   // Set up keyboard navigation
   document.addEventListener('keydown', handleKeyboardNavigation);
-  
+
   // Set up proper tab order
   setupTabOrder();
-  
+
   // Verify no keyboard traps
   verifyNoKeyboardTraps();
-  
+
   // Initial UI update
   checkAndUpdateUI();
-  
+
   // Start polling for status updates every 3 seconds (increased from 2s for efficiency)
   // Polling will automatically stop when export button is enabled
   startPolling(3000);

@@ -383,17 +383,10 @@ function extractChatGPTConversation(conversationData) {
 // EXPORTS
 // ============================================================================
 
-// Expose to window for background script usage
-if (typeof window !== 'undefined') {
-    window.extractChatGPTConversation = extractChatGPTConversation;
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        extractChatGPTConversation,
-        extractConversationMetadata,
-        extractConversationMessages,
-        generateMetadataCSV,
-        generateMessagesCSV
-    };
-}
+export {
+    extractChatGPTConversation,
+    extractConversationMetadata,
+    extractConversationMessages,
+    generateMetadataCSV,
+    generateMessagesCSV
+};
