@@ -114,28 +114,7 @@ const exportRateLimit = {
 // SHARED CONFIGURATION LOADING (from config/settings.js)
 // ============================================================================
 
-let EXTENSION_CONFIG = null;
-let getPlatformByUrl = null;
-
-/**
- * Load the shared configuration module once and cache it.
- * Must be called before any platform detection.
- */
-async function loadConfigModule() {
-  if (EXTENSION_CONFIG && getPlatformByUrl) {
-    return;
-  }
-
-  const configUrl = browser.runtime.getURL('config/settings.js');
-  const module = await import(configUrl);
-
-  EXTENSION_CONFIG = module.EXTENSION_CONFIG;
-  getPlatformByUrl = module.getPlatformByUrl;
-
-  if (!EXTENSION_CONFIG || typeof getPlatformByUrl !== 'function') {
-    throw new Error('Configuration module did not export expected members');
-  }
-}
+import { EXTENSION_CONFIG, getPlatformByUrl } from './config/settings.js';
 
 
 // ============================================================================
@@ -387,8 +366,14 @@ function updatePlatformBadge(platform) {
   const iconDiv = document.createElement('div');
   iconDiv.className = 'platform-badge__icon';
   iconDiv.setAttribute('aria-hidden', 'true');
-  // Only set innerHTML for icon since it's from trusted hardcoded PLATFORMS object
-  iconDiv.innerHTML = platform.icon;
+  // Use DOMParser to safely parse SVG string instead of innerHTML
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(platform.icon, 'image/svg+xml');
+  const svgElement = doc.documentElement;
+
+  // Import node to current document to ensure ownership
+  const importedSvg = document.importNode(svgElement, true);
+  iconDiv.appendChild(importedSvg);
 
   const nameSpan = document.createElement('span');
   nameSpan.className = 'platform-badge__name';
@@ -1233,18 +1218,8 @@ function handleFocusDuringStateChange() {
  * Initialize popup UI
  */
 async function init() {
-  try {
-    // Load shared configuration before any platform detection
-    await loadConfigModule();
-  } catch (error) {
-    console.error('[Popup] Failed to load configuration module:', error);
-    updateStatus(
-      'error',
-      'Failed to initialize extension',
-      'Configuration could not be loaded. Please try reopening the popup.'
-    );
-    return;
-  }
+  // Configuration is now loaded via static import
+  // await loadConfigModule();
 
   // Set up event listeners
   const exportBtn = document.getElementById('exportBtn');
