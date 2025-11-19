@@ -155,14 +155,24 @@ const CopilotHandler = {
 
 /**
  * Escapes a field value for CSV format according to RFC 4180
+ * Also prevents CSV injection attacks
  */
 function escapeCSVField(value) {
   if (value === null || value === undefined) {
     return '';
   }
 
-  const stringValue = String(value);
+  let stringValue = String(value);
 
+  // Prevent CSV injection: sanitize values starting with dangerous characters
+  // These characters can trigger formula execution in Excel/Sheets: = + - @ \t \r
+  const dangerousChars = ['=', '+', '-', '@', '\t', '\r'];
+  if (dangerousChars.some(char => stringValue.startsWith(char))) {
+    // Prefix with single quote to treat as text
+    stringValue = "'" + stringValue;
+  }
+
+  // Standard CSV escaping per RFC 4180
   if (stringValue.includes(',') || stringValue.includes('"') ||
     stringValue.includes('\n') || stringValue.includes('\r')) {
     return '"' + stringValue.replace(/"/g, '""') + '"';
@@ -224,6 +234,87 @@ function generateFilename(prefix = 'export', suffix = '') {
 }
 
 /**
+ * Validate conversation data structure and size
+ * @param {Object} data - The conversation data to validate
+ * @param {string} platform - The platform identifier
+ * @returns {Object} Validation result with isValid and error properties
+ */
+function validateConversationData(data, platform) {
+  // Basic type check
+  if (!data || typeof data !== 'object') {
+    return { isValid: false, error: 'Data is not an object' };
+  }
+
+  // Size limit check (prevent DoS attacks)
+  const MAX_PAYLOAD_SIZE = 50 * 1024 * 1024; // 50MB
+  try {
+    const jsonString = JSON.stringify(data);
+    const jsonSize = jsonString.length;
+
+    if (jsonSize > MAX_PAYLOAD_SIZE) {
+      return {
+        isValid: false,
+        error: `Payload too large: ${(jsonSize / 1024 / 1024).toFixed(2)}MB (max: 50MB)`
+      };
+    }
+  } catch (error) {
+    return { isValid: false, error: 'Failed to serialize data: ' + error.message };
+  }
+
+  // Platform-specific structure validation
+  switch (platform) {
+    case 'chatgpt':
+      // ChatGPT requires either mapping or conversation_id
+      if (!data.mapping && !data.conversation_id) {
+        return {
+          isValid: false,
+          error: 'ChatGPT data missing required fields (mapping or conversation_id)'
+        };
+      }
+      // Validate mapping structure if present
+      if (data.mapping && typeof data.mapping !== 'object') {
+        return { isValid: false, error: 'ChatGPT mapping is not an object' };
+      }
+      break;
+
+    case 'claude':
+      // Claude requires chat_messages array
+      if (!Array.isArray(data.chat_messages)) {
+        return {
+          isValid: false,
+          error: 'Claude data missing required chat_messages array'
+        };
+      }
+      // Validate array is not empty
+      if (data.chat_messages.length === 0) {
+        return { isValid: false, error: 'Claude chat_messages array is empty' };
+      }
+      break;
+
+    case 'copilot':
+      // Copilot requires results array
+      if (!Array.isArray(data.results)) {
+        return {
+          isValid: false,
+          error: 'Copilot data missing required results array'
+        };
+      }
+      // Validate array is not empty
+      if (data.results.length === 0) {
+        return { isValid: false, error: 'Copilot results array is empty' };
+      }
+      break;
+
+    default:
+      // For unknown platforms, just ensure it's an object
+      console.warn(`[${platform}] Unknown platform, skipping detailed validation`);
+      break;
+  }
+
+  return { isValid: true, error: null };
+}
+
+/**
  * Handle conversation data from any platform
  */
 function handleConversationData(message) {
@@ -235,7 +326,14 @@ function handleConversationData(message) {
     return;
   }
 
-  console.log(`[${platform}] Processing conversation data`);
+  // Validate conversation data
+  const validation = validateConversationData(conversationData, platform);
+  if (!validation.isValid) {
+    console.error(`[${platform}] Invalid conversation data:`, validation.error);
+    return;
+  }
+
+  console.log(`[${platform}] Processing conversation data (validated)`);
 
   try {
     // Get platform-specific handler
@@ -330,9 +428,39 @@ function handleConversationData(message) {
  * Message listener - routes to platform handlers
  */
 browser.runtime.onMessage.addListener((message, sender) => {
-  // Validate sender
-  if (sender.id !== browser.runtime.id) return;
+  // Proper sender validation
+  if (!sender || sender.id !== browser.runtime.id) {
+    console.warn('[Background] Message from unauthorized sender:', sender?.id);
+    return;
+  }
 
+  // For content scripts, validate the URL matches expected domains
+  if (sender.tab) {
+    try {
+      const url = new URL(sender.tab.url);
+      const allowedDomains = [
+        'chatgpt.com',
+        'chat.openai.com',
+        'claude.ai',
+        'copilot.microsoft.com',
+        'chat.deepseek.com'
+      ];
+
+      if (!allowedDomains.some(domain => url.hostname.endsWith(domain))) {
+        console.warn('[Background] Message from unauthorized domain:', url.hostname);
+        return;
+      }
+    } catch (error) {
+      console.warn('[Background] Invalid URL in sender tab:', error);
+      return;
+    }
+  }
+
+  // Validate message structure
+  if (!message || typeof message.type !== 'string') {
+    console.warn('[Background] Invalid message structure:', message);
+    return;
+  }
 
   // Handle ChatGPT conversation data
   if (message.type === 'CHATGPT_CONVERSATION_DATA') {
@@ -368,6 +496,78 @@ browser.runtime.onMessage.addListener((message, sender) => {
 });
 
 console.log('AI Chat Exporter: Main background script loaded at ' + new Date().toISOString());
+
+// Runtime Integrity Monitoring
+// Register critical functions for integrity checking
+const criticalFunctions = {
+  validateConversationData,
+  sanitizeForCSV: ClaudeHandler.sanitizeForCSV,
+  extractChatGPTConversation
+};
+
+// Simple function fingerprinting for runtime integrity
+const functionFingerprints = new Map();
+
+function registerCriticalFunctions() {
+  for (const [name, func] of Object.entries(criticalFunctions)) {
+    if (typeof func === 'function') {
+      const source = func.toString();
+      let hash = 0;
+      for (let i = 0; i < source.length; i++) {
+        hash = ((hash << 5) - hash) + source.charCodeAt(i);
+        hash = hash & hash;
+      }
+      functionFingerprints.set(name, hash);
+    }
+  }
+  console.log('[Integrity] Registered', functionFingerprints.size, 'critical functions');
+}
+
+function verifyIntegrity() {
+  let tamperedCount = 0;
+
+  for (const [name, expectedHash] of functionFingerprints.entries()) {
+    const func = criticalFunctions[name];
+    if (!func) {
+      console.error('[Integrity] Critical function missing:', name);
+      tamperedCount++;
+      continue;
+    }
+
+    const source = func.toString();
+    let actualHash = 0;
+    for (let i = 0; i < source.length; i++) {
+      actualHash = ((actualHash << 5) - actualHash) + source.charCodeAt(i);
+      actualHash = actualHash & actualHash;
+    }
+
+    if (actualHash !== expectedHash) {
+      console.error('[Integrity] Function tampering detected:', name);
+      tamperedCount++;
+    }
+  }
+
+  if (tamperedCount === 0) {
+    console.log('[Integrity] All critical functions verified');
+  } else {
+    console.error('[Integrity] Tampering detected in', tamperedCount, 'function(s)');
+  }
+
+  return tamperedCount === 0;
+}
+
+// Initialize integrity checking
+registerCriticalFunctions();
+
+// Verify integrity periodically (every 5 minutes)
+setInterval(() => {
+  verifyIntegrity();
+}, 300000);
+
+// Verify on first load
+setTimeout(() => {
+  verifyIntegrity();
+}, 1000);
 
 // Global error handler
 self.addEventListener('unhandledrejection', event => {

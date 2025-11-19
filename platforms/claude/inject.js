@@ -14,6 +14,12 @@
   const MESSAGE_TYPE = 'CLAUDE_CONVERSATION_DATA';
   const SOURCE_ID = 'claude-exporter-inject';
 
+  // Logging configuration
+  const DEBUG_MODE = false; // Set to true for development, false for production
+
+  // Response validation configuration
+  const MAX_RESPONSE_SIZE = 100 * 1024 * 1024; // 100MB
+
   // Store captured conversation IDs to avoid duplicate fetches
   const capturedIds = new Set();
 
@@ -24,10 +30,158 @@
   // Store the original fetch function
   const originalFetch = window.fetch;
 
+  // Get secret key from content script
+  let SECRET_KEY = null;
+
   /**
-   * Send data to content script
+   * Redact sensitive information from log data
    */
-  function sendDataToContentScript(data) {
+  function redactSensitiveData(data) {
+    if (!data || typeof data !== 'object') {
+      return data;
+    }
+
+    const redacted = Array.isArray(data) ? [...data] : { ...data };
+
+    // Redact conversation IDs (show first 8 chars only)
+    if (redacted.conversationId && typeof redacted.conversationId === 'string') {
+      redacted.conversationId = redacted.conversationId.substring(0, 8) + '...';
+    }
+    if (redacted.conversation_id && typeof redacted.conversation_id === 'string') {
+      redacted.conversation_id = redacted.conversation_id.substring(0, 8) + '...';
+    }
+    if (redacted.id && typeof redacted.id === 'string' && redacted.id.length > 16) {
+      redacted.id = redacted.id.substring(0, 8) + '...';
+    }
+    if (redacted.uuid && typeof redacted.uuid === 'string') {
+      redacted.uuid = redacted.uuid.substring(0, 8) + '...';
+    }
+    if (redacted.orgId && typeof redacted.orgId === 'string') {
+      redacted.orgId = redacted.orgId.substring(0, 8) + '...';
+    }
+
+    return redacted;
+  }
+
+  /**
+   * Log debug message (only in debug mode)
+   */
+  function logDebug(message, data = null) {
+    if (!DEBUG_MODE) return;
+    if (data) {
+      console.log(`[${PLATFORM}] [DEBUG]`, message, redactSensitiveData(data));
+    } else {
+      console.log(`[${PLATFORM}] [DEBUG]`, message);
+    }
+  }
+
+  /**
+   * Log info message
+   */
+  function logInfo(message, data = null) {
+    if (data) {
+      console.log(`[${PLATFORM}]`, message, redactSensitiveData(data));
+    } else {
+      console.log(`[${PLATFORM}]`, message);
+    }
+  }
+
+  /**
+   * Log warning message
+   */
+  function logWarn(message, data = null) {
+    if (data) {
+      console.warn(`[${PLATFORM}] [WARN]`, message, redactSensitiveData(data));
+    } else {
+      console.warn(`[${PLATFORM}] [WARN]`, message);
+    }
+  }
+
+  /**
+   * Log error message
+   */
+  function logError(message, data = null) {
+    if (data) {
+      console.error(`[${PLATFORM}] [ERROR]`, message, redactSensitiveData(data));
+    } else {
+      console.error(`[${PLATFORM}] [ERROR]`, message);
+    }
+  }
+
+  /**
+   * Validate response before processing
+   * @param {Response} response - The fetch response
+   * @returns {Object} Validation result with isValid and error properties
+   */
+  function validateResponse(response) {
+    // Check if response is OK
+    if (!response.ok) {
+      return { isValid: false, error: `Response not OK: ${response.status}` };
+    }
+
+    // Validate Content-Type
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return { isValid: false, error: `Invalid content type: ${contentType}` };
+    }
+
+    // Check response size
+    const contentLength = response.headers.get('content-length');
+    if (contentLength) {
+      const size = parseInt(contentLength, 10);
+      if (isNaN(size)) {
+        return { isValid: false, error: 'Invalid content-length header' };
+      }
+      if (size > MAX_RESPONSE_SIZE) {
+        return { isValid: false, error: `Response too large: ${size} bytes (max: ${MAX_RESPONSE_SIZE})` };
+      }
+    }
+
+    return { isValid: true };
+  }
+
+  /**
+   * Get secret key from meta tag injected by content script
+   */
+  function getSecretKey() {
+    if (SECRET_KEY) return SECRET_KEY;
+
+    const meta = document.querySelector('meta[name="claude-exporter-secret"]');
+    if (meta) {
+      SECRET_KEY = meta.content;
+      return SECRET_KEY;
+    }
+
+    // If not found, wait and try again
+    return null;
+  }
+
+  /**
+   * Sign a message using HMAC-SHA256
+   */
+  async function signMessage(message, secret) {
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(secret);
+    const messageData = encoder.encode(message);
+
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+
+    const signature = await crypto.subtle.sign('HMAC', key, messageData);
+    return Array.from(new Uint8Array(signature), byte =>
+      byte.toString(16).padStart(2, '0')
+    ).join('');
+  }
+
+  /**
+   * Send data to content script with cryptographic signature
+   */
+  async function sendDataToContentScript(data) {
     if (!data || !Array.isArray(data.chat_messages)) return;
 
     const conversationId = data.uuid;
@@ -35,17 +189,40 @@
       capturedIds.add(conversationId);
     }
 
+    // Get secret key
+    const secret = getSecretKey();
+    if (!secret) {
+      console.warn(`[${PLATFORM}] Secret key not available, cannot send message`);
+      return;
+    }
+
+    // Create message with timestamp and nonce
+    const timestamp = Date.now();
+    const nonce = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+
+    const messageData = {
+      type: MESSAGE_TYPE,
+      payload: data,
+      source: SOURCE_ID,
+      platform: 'claude',
+      timestamp: timestamp,
+      nonce: nonce
+    };
+
+    // Sign the message
+    const messageString = JSON.stringify(messageData);
+    const signature = await signMessage(messageString, secret);
+
+    // Send signed message
     window.postMessage(
       {
-        type: MESSAGE_TYPE,
-        payload: data,
-        source: SOURCE_ID,
-        platform: 'claude'
+        ...messageData,
+        signature: signature
       },
       window.location.origin
     );
 
-    console.log(`[${PLATFORM}] ✓ Captured conversation data`, {
+    console.log(`[${PLATFORM}] ✓ Captured conversation data (signed)`, {
       conversationId: conversationId,
       messageCount: data.chat_messages.length,
       source: 'active-fetch'
@@ -57,16 +234,16 @@
    */
   async function fetchConversation(conversationId) {
     if (capturedIds.has(conversationId)) {
-      console.log(`[${PLATFORM}] Already captured ${conversationId}, skipping active fetch`);
+      logDebug('Already captured conversation, skipping active fetch', { conversationId });
       return;
     }
 
     if (!capturedHeaders || !capturedOrgId) {
-      console.warn(`[${PLATFORM}] Cannot active fetch: Missing headers or Org ID`, { hasHeaders: !!capturedHeaders, orgId: capturedOrgId });
+      logWarn('Cannot active fetch: Missing headers or Org ID', { hasHeaders: !!capturedHeaders, orgId: capturedOrgId });
       return;
     }
 
-    console.log(`[${PLATFORM}] Active fetch triggered for conversation ${conversationId}`);
+    logDebug('Active fetch triggered', { conversationId });
 
     try {
       const response = await originalFetch(`https://claude.ai/api/organizations/${capturedOrgId}/chat_conversations/${conversationId}`, {
@@ -74,16 +251,25 @@
         headers: capturedHeaders
       });
 
-      if (!response.ok) {
-        console.warn(`[${PLATFORM}] Active fetch failed: ${response.status}`);
+      // Validate response
+      const validation = validateResponse(response);
+      if (!validation.isValid) {
+        logWarn('Active fetch validation failed', { error: validation.error });
         return;
       }
 
       const data = await response.json();
-      sendDataToContentScript(data);
+
+      // Validate data structure before processing
+      if (!data || typeof data !== 'object') {
+        logWarn('Invalid data structure: not an object');
+        return;
+      }
+
+      await sendDataToContentScript(data);
 
     } catch (error) {
-      console.error(`[${PLATFORM}] Active fetch error:`, error);
+      logError('Active fetch error', { error: error.message });
     }
   }
 
@@ -156,7 +342,7 @@
         const orgId = extractOrgId(url);
         if (orgId) {
           capturedOrgId = orgId;
-          console.log(`[${PLATFORM}] Captured Organization ID: ${orgId}`);
+          logDebug('Captured Organization ID', { orgId });
         }
       }
 
@@ -212,12 +398,39 @@
       );
 
       if (isConversationRequest) {
-        const clone = response.clone();
-        clone.json().then(data => {
-          if (data && Array.isArray(data.chat_messages)) {
-            sendDataToContentScript(data);
-          }
-        }).catch(() => { });
+        // Validate response before processing
+        const validation = validateResponse(response);
+        if (!validation.isValid) {
+          logWarn('Passive intercept validation failed', { error: validation.error });
+          return response;
+        }
+
+        // Clone response for processing
+        let clone;
+        try {
+          clone = response.clone();
+        } catch (cloneError) {
+          logWarn('Could not clone response', { error: cloneError.message });
+          return response;
+        }
+
+        // Parse JSON with validation
+        clone.json()
+          .then(async data => {
+            // Validate data structure
+            if (!data || typeof data !== 'object') {
+              logWarn('Invalid data structure: not an object');
+              return;
+            }
+
+            // Validate platform-specific structure
+            if (Array.isArray(data.chat_messages)) {
+              await sendDataToContentScript(data);
+            }
+          })
+          .catch(error => {
+            logWarn('Failed to parse response', { error: error.message });
+          });
       }
     } catch (e) {
       // Ignore errors in passive interceptor
@@ -229,6 +442,6 @@
   // Initialize
   hookHistoryApi();
   checkCurrentUrl(); // Check initial URL
-  console.log(`[${PLATFORM}] Active fetcher installed`);
+  logInfo('Active fetcher installed');
 
 })();

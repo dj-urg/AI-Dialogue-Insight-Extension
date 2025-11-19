@@ -12,8 +12,156 @@
   const MESSAGE_TYPE = 'COPILOT_CONVERSATION_DATA';
   const SOURCE_ID = 'copilot-exporter-inject';
 
+  // Logging configuration
+  const DEBUG_MODE = false; // Set to true for development, false for production
+
+  // Response validation configuration
+  const MAX_RESPONSE_SIZE = 100 * 1024 * 1024; // 100MB
+
   // Store the original fetch function
   const originalFetch = window.fetch;
+
+  // Get secret key from content script
+  let SECRET_KEY = null;
+
+  /**
+   * Redact sensitive information from log data
+   */
+  function redactSensitiveData(data) {
+    if (!data || typeof data !== 'object') {
+      return data;
+    }
+
+    const redacted = Array.isArray(data) ? [...data] : { ...data };
+
+    // Redact conversation IDs (show first 8 chars only)
+    if (redacted.conversationId && typeof redacted.conversationId === 'string') {
+      redacted.conversationId = redacted.conversationId.substring(0, 8) + '...';
+    }
+    if (redacted.conversation_id && typeof redacted.conversation_id === 'string') {
+      redacted.conversation_id = redacted.conversation_id.substring(0, 8) + '...';
+    }
+    if (redacted.id && typeof redacted.id === 'string' && redacted.id.length > 16) {
+      redacted.id = redacted.id.substring(0, 8) + '...';
+    }
+
+    return redacted;
+  }
+
+  /**
+   * Log debug message (only in debug mode)
+   */
+  function logDebug(message, data = null) {
+    if (!DEBUG_MODE) return;
+    if (data) {
+      console.log(`[${PLATFORM}] [DEBUG]`, message, redactSensitiveData(data));
+    } else {
+      console.log(`[${PLATFORM}] [DEBUG]`, message);
+    }
+  }
+
+  /**
+   * Log info message
+   */
+  function logInfo(message, data = null) {
+    if (data) {
+      console.log(`[${PLATFORM}]`, message, redactSensitiveData(data));
+    } else {
+      console.log(`[${PLATFORM}]`, message);
+    }
+  }
+
+  /**
+   * Log warning message
+   */
+  function logWarn(message, data = null) {
+    if (data) {
+      console.warn(`[${PLATFORM}] [WARN]`, message, redactSensitiveData(data));
+    } else {
+      console.warn(`[${PLATFORM}] [WARN]`, message);
+    }
+  }
+
+  /**
+   * Log error message
+   */
+  function logError(message, data = null) {
+    if (data) {
+      console.error(`[${PLATFORM}] [ERROR]`, message, redactSensitiveData(data));
+    } else {
+      console.error(`[${PLATFORM}] [ERROR]`, message);
+    }
+  }
+
+  /**
+   * Validate response before processing
+   * @param {Response} response - The fetch response
+   * @returns {Object} Validation result with isValid and error properties
+   */
+  function validateResponse(response) {
+    // Check if response is OK
+    if (!response.ok) {
+      return { isValid: false, error: `Response not OK: ${response.status}` };
+    }
+
+    // Validate Content-Type
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return { isValid: false, error: `Invalid content type: ${contentType}` };
+    }
+
+    // Check response size
+    const contentLength = response.headers.get('content-length');
+    if (contentLength) {
+      const size = parseInt(contentLength, 10);
+      if (isNaN(size)) {
+        return { isValid: false, error: 'Invalid content-length header' };
+      }
+      if (size > MAX_RESPONSE_SIZE) {
+        return { isValid: false, error: `Response too large: ${size} bytes (max: ${MAX_RESPONSE_SIZE})` };
+      }
+    }
+
+    return { isValid: true };
+  }
+
+  /**
+   * Get secret key from meta tag injected by content script
+   */
+  function getSecretKey() {
+    if (SECRET_KEY) return SECRET_KEY;
+
+    const meta = document.querySelector('meta[name="copilot-exporter-secret"]');
+    if (meta) {
+      SECRET_KEY = meta.content;
+      return SECRET_KEY;
+    }
+
+    // If not found, wait and try again
+    return null;
+  }
+
+  /**
+   * Sign a message using HMAC-SHA256
+   */
+  async function signMessage(message, secret) {
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(secret);
+    const messageData = encoder.encode(message);
+
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+
+    const signature = await crypto.subtle.sign('HMAC', key, messageData);
+    return Array.from(new Uint8Array(signature), byte =>
+      byte.toString(16).padStart(2, '0')
+    ).join('');
+  }
 
   /**
    * Extract conversation ID from Copilot API URL
@@ -56,11 +204,12 @@
       );
 
       if (isConversationRequest) {
-        console.log(`[${PLATFORM}] Detected conversation API request, attempting to capture...`);
+        logDebug('Detected conversation API request, attempting to capture...');
 
-        // Check if response is OK before trying to clone
-        if (!response.ok) {
-          console.log(`[${PLATFORM}] Response not OK, status:`, response.status);
+        // Validate response before processing
+        const validation = validateResponse(response);
+        if (!validation.isValid) {
+          logWarn('Response validation failed', { error: validation.error });
           return response;
         }
 
@@ -69,16 +218,22 @@
         try {
           clone = response.clone();
         } catch (cloneError) {
-          console.warn(`[${PLATFORM}] Could not clone response, may already be consumed:`, cloneError);
+          logWarn('Could not clone response', { error: cloneError.message });
           return response;
         }
 
-        // Parse the JSON asynchronously
+        // Parse the JSON asynchronously with validation
         clone.json()
-          .then(data => {
+          .then(async data => {
+            // Validate data structure
+            if (!data || typeof data !== 'object') {
+              logWarn('Invalid data structure: not an object');
+              return;
+            }
+
             // Verify this looks like conversation data
             // Copilot conversations have a results array
-            if (data && Array.isArray(data.results)) {
+            if (Array.isArray(data.results)) {
               // Extract conversation ID from URL
               const conversationId = extractConversationIdFromUrl(url);
 
@@ -88,39 +243,61 @@
                 conversationId: conversationId
               };
 
-              // Send to content script via postMessage
+              // Get secret key
+              const secret = getSecretKey();
+              if (!secret) {
+                console.warn(`[${PLATFORM}] Secret key not available, cannot send message`);
+                return;
+              }
+
+              // Create message with timestamp and nonce
+              const timestamp = Date.now();
+              const nonce = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+
+              const messageData = {
+                type: MESSAGE_TYPE,
+                payload: payloadWithId,
+                source: SOURCE_ID,
+                platform: 'copilot',
+                timestamp: timestamp,
+                nonce: nonce
+              };
+
+              // Sign the message
+              const messageString = JSON.stringify(messageData);
+              const signature = await signMessage(messageString, secret);
+
+              // Send signed message to content script via postMessage
               window.postMessage(
                 {
-                  type: MESSAGE_TYPE,
-                  payload: payloadWithId,
-                  source: SOURCE_ID,
-                  platform: 'copilot'
+                  ...messageData,
+                  signature: signature
                 },
                 window.location.origin
               );
 
-              console.log(`[${PLATFORM}] ✓ Captured conversation data`, {
+              logDebug('Captured conversation data (signed)', {
                 conversationId: conversationId,
                 messageCount: data.results.length,
                 hasResults: true
               });
             } else {
-              console.log(`[${PLATFORM}] Response does not look like conversation data (missing results array)`);
+              logDebug('Response does not look like conversation data (missing results array)');
             }
           })
           .catch(error => {
-            console.log(`[${PLATFORM}] Failed to parse response as JSON:`, error.message);
+            logWarn('Failed to parse response', { error: error.message });
           });
       }
     } catch (e) {
       // Do not break the page if anything goes wrong
-      console.debug(`[${PLATFORM}] Error intercepting fetch`, e);
+      logDebug('Error intercepting fetch', { error: e.message });
     }
 
     // Always return the original response
     return response;
   };
 
-  console.log(`[${PLATFORM}] Fetch interceptor installed in page context`);
+  logInfo('Fetch interceptor installed in page context');
 
 })();

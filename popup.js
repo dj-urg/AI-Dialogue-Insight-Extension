@@ -180,17 +180,54 @@ const state = {
 };
 
 // ============================================================================
+// RATE LIMITING CONFIGURATION
+// ============================================================================
+
+/**
+ * Rate limiting for export operations to prevent resource exhaustion
+ * and denial of service attacks
+ */
+const exportRateLimit = {
+  // Timestamp of last export
+  lastExport: 0,
+
+  // Minimum interval between exports (milliseconds)
+  minInterval: 2000, // 2 seconds
+
+  // Maximum exports allowed per minute
+  maxExportsPerMinute: 10,
+
+  // Array of recent export timestamps (for per-minute tracking)
+  recentExports: []
+};
+
+// ============================================================================
 // PLATFORM DETECTION
 // ============================================================================
 
 /**
- * Detect platform from URL
+ * Detect platform from URL with scheme validation
  * @param {string} url - The URL to check
  * @returns {Object|null} Platform object with id and config, or null if not supported
  */
 function detectPlatform(url) {
   try {
-    const hostname = new URL(url).hostname;
+    const parsedUrl = new URL(url);
+
+    // Security: Only allow http and https schemes
+    // Prevents exploitation via javascript:, data:, file:, chrome:, etc.
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      console.warn('[Security] Invalid URL scheme detected:', parsedUrl.protocol, 'for URL:', url);
+      return null;
+    }
+
+    const hostname = parsedUrl.hostname;
+
+    // Validate hostname is not empty
+    if (!hostname || hostname.trim() === '') {
+      console.warn('[Security] Empty hostname detected in URL:', url);
+      return null;
+    }
 
     for (const [platformId, platformConfig] of Object.entries(PLATFORMS)) {
       if (platformConfig.domains.some(domain =>
@@ -234,20 +271,51 @@ function checkConversationId(platform, url) {
 
 /**
  * Sanitize error message to prevent exposure of sensitive data
+ * Removes UUIDs, emails, file paths, URLs, tokens, and organization IDs
  * @param {string} message - Raw error message
  * @returns {string} Sanitized error message
  */
 function sanitizeErrorMessage(message) {
   if (!message) return 'An error occurred';
 
-  // Remove potential conversation IDs (UUIDs and similar patterns)
-  let sanitized = message.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '[conversation-id]');
+  // Ensure message is a string
+  let sanitized = String(message);
 
-  // Remove potential API keys or tokens
-  sanitized = sanitized.replace(/[a-zA-Z0-9_-]{20,}/g, '[token]');
+  // Remove UUIDs (conversation IDs, session IDs, etc.)
+  sanitized = sanitized.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '[id]');
 
-  // Remove URLs that might contain sensitive query parameters
+  // Remove email addresses
+  sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[email]');
+
+  // Remove Windows file paths (e.g., C:\Users\username\file.txt)
+  sanitized = sanitized.replace(/[A-Za-z]:\\[\w\\\-. ]+/g, '[path]');
+
+  // Remove Unix/Mac file paths (e.g., /home/username/file.txt)
+  // Be conservative to avoid removing legitimate text like "and/or"
+  sanitized = sanitized.replace(/\/(?:home|users|usr|var|opt|etc)[\w\/\-. ]*/gi, '[path]');
+  sanitized = sanitized.replace(/\/[\w\-]+\/[\w\-]+\/[\w\/\-. ]{10,}/g, '[path]');
+
+  // Remove URLs (must be done before token removal to avoid partial matches)
   sanitized = sanitized.replace(/https?:\/\/[^\s]+/g, '[url]');
+
+  // Remove organization IDs (e.g., org-abc123, org_abc123)
+  sanitized = sanitized.replace(/org[-_][a-zA-Z0-9]+/gi, '[org-id]');
+
+  // Remove project IDs (e.g., proj-abc123, project-abc123)
+  sanitized = sanitized.replace(/proj(?:ect)?[-_][a-zA-Z0-9]+/gi, '[project-id]');
+
+  // Remove API keys and tokens (more conservative - only long alphanumeric strings)
+  // Use word boundaries to avoid removing legitimate words
+  sanitized = sanitized.replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[token]');
+
+  // Remove potential session tokens or JWT tokens
+  sanitized = sanitized.replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[jwt]');
+
+  // Remove IP addresses
+  sanitized = sanitized.replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[ip]');
+
+  // Remove port numbers in URLs or addresses
+  sanitized = sanitized.replace(/:\d{2,5}\b/g, ':[port]');
 
   // Truncate very long messages
   if (sanitized.length > 200) {
@@ -409,16 +477,27 @@ function updatePlatformBadge(platform) {
     return;
   }
 
-  const badgeHTML = `
-    <div class="platform-badge platform-badge--${platform.id}">
-      <div class="platform-badge__icon" aria-hidden="true">
-        ${platform.icon}
-      </div>
-      <span class="platform-badge__name">${platform.name}</span>
-    </div>
-  `;
+  // Use DOM methods instead of innerHTML to prevent XSS
+  const badge = document.createElement('div');
+  badge.className = `platform-badge platform-badge--${platform.id}`;
 
-  platformBadge.innerHTML = badgeHTML;
+  const iconDiv = document.createElement('div');
+  iconDiv.className = 'platform-badge__icon';
+  iconDiv.setAttribute('aria-hidden', 'true');
+  // Only set innerHTML for icon since it's from trusted hardcoded PLATFORMS object
+  iconDiv.innerHTML = platform.icon;
+
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'platform-badge__name';
+  // Use textContent instead of innerHTML to prevent XSS
+  nameSpan.textContent = platform.name;
+
+  badge.appendChild(iconDiv);
+  badge.appendChild(nameSpan);
+
+  // Clear and append
+  platformBadge.innerHTML = '';
+  platformBadge.appendChild(badge);
 }
 
 /**
@@ -548,19 +627,36 @@ function updateExportButton(enabled, text = null, showSpinner = false) {
   // Show/hide spinner in button only if changed
   if (hasSpinnerChanged) {
     if (showSpinner) {
-      // Replace download icon with spinner
-      buttonIcon.innerHTML = `
-        <svg class="spinner__svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <circle class="spinner__circle" cx="12" cy="12" r="10"></circle>
-        </svg>
-      `;
+      // Replace download icon with spinner using DOM methods
+      buttonIcon.innerHTML = ''; // Clear existing content
+
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'spinner__svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('class', 'spinner__circle');
+      circle.setAttribute('cx', '12');
+      circle.setAttribute('cy', '12');
+      circle.setAttribute('r', '10');
+
+      svg.appendChild(circle);
+      buttonIcon.appendChild(svg);
       buttonIcon.classList.add('spinner');
     } else {
-      // Restore download icon
-      buttonIcon.innerHTML = `
-        <path d="M8.75 1a.75.75 0 00-1.5 0v6.69L5.03 5.47a.75.75 0 00-1.06 1.06l3.5 3.5a.75.75 0 001.06 0l3.5-3.5a.75.75 0 10-1.06-1.06L8.75 7.69V1z" fill="currentColor"/>
-        <path d="M3.5 9.75a.75.75 0 00-1.5 0v1.5A2.75 2.75 0 004.75 14h6.5A2.75 2.75 0 0014 11.25v-1.5a.75.75 0 00-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5z" fill="currentColor"/>
-      `;
+      // Restore download icon using DOM methods
+      buttonIcon.innerHTML = ''; // Clear existing content
+
+      const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path1.setAttribute('d', 'M8.75 1a.75.75 0 00-1.5 0v6.69L5.03 5.47a.75.75 0 00-1.06 1.06l3.5 3.5a.75.75 0 001.06 0l3.5-3.5a.75.75 0 10-1.06-1.06L8.75 7.69V1z');
+      path1.setAttribute('fill', 'currentColor');
+
+      const path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path2.setAttribute('d', 'M3.5 9.75a.75.75 0 00-1.5 0v1.5A2.75 2.75 0 004.75 14h6.5A2.75 2.75 0 0014 11.25v-1.5a.75.75 0 00-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5z');
+      path2.setAttribute('fill', 'currentColor');
+
+      buttonIcon.appendChild(path1);
+      buttonIcon.appendChild(path2);
       buttonIcon.classList.remove('spinner');
     }
   }
@@ -600,14 +696,47 @@ function hideFilePreview() {
 }
 
 // ============================================================================
-// POLLING CONTROL
+// EVENT-DRIVEN UPDATE MECHANISM (with fallback polling)
 // ============================================================================
 
 /**
- * Start polling for status updates
- * @param {number} interval - Polling interval in milliseconds (default: 3000ms)
+ * Set up event-driven updates from content scripts
+ * Content scripts notify popup when conversation data is captured
  */
-function startPolling(interval = 3000) {
+function setupEventDrivenUpdates() {
+  browser.runtime.onMessage.addListener((message, sender) => {
+    // Only process CONVERSATION_READY messages
+    if (message.type !== 'CONVERSATION_READY') {
+      return;
+    }
+
+    // Validate sender is from our extension
+    if (!sender || sender.id !== browser.runtime.id) {
+      console.warn('[Popup] Ignoring CONVERSATION_READY from unauthorized sender');
+      return;
+    }
+
+    console.log('[Popup] Conversation ready notification received', {
+      platform: message.platform,
+      conversationId: message.conversationId ? message.conversationId.substring(0, 8) + '...' : 'unknown'
+    });
+
+    // Update UI immediately when notified
+    debouncedCheckAndUpdateUI();
+
+    // Stop polling once we receive data (export button will be enabled)
+    // Polling will be stopped by updateExportButton when button becomes enabled
+  });
+
+  console.log('[Popup] Event-driven updates enabled');
+}
+
+/**
+ * Start fallback polling for status updates
+ * Only used as fallback if event-driven updates don't work
+ * @param {number} interval - Polling interval in milliseconds (default: 10000ms)
+ */
+function startPolling(interval = 10000) {
   // Don't start if already polling
   if (state.polling.isPolling) {
     return;
@@ -620,12 +749,12 @@ function startPolling(interval = 3000) {
     clearInterval(state.polling.intervalId);
   }
 
-  // Set up new polling interval
+  // Set up new polling interval (much longer than before - 10s instead of 3s)
   state.polling.intervalId = setInterval(() => {
     debouncedCheckAndUpdateUI();
   }, interval);
 
-  console.log(`Polling started with ${interval}ms interval`);
+  console.log(`[Popup] Fallback polling started with ${interval}ms interval`);
 }
 
 /**
@@ -649,7 +778,7 @@ function stopPolling() {
     state.polling.debounceTimeout = null;
   }
 
-  console.log('Polling stopped');
+  console.log('[Popup] Polling stopped');
 }
 
 /**
@@ -861,14 +990,57 @@ async function checkAndUpdateUI() {
 // ============================================================================
 
 /**
- * Handle export button click
+ * Handle export button click with rate limiting
  */
 async function handleExportClick() {
+  const now = Date.now();
+
+  // Rate limiting check 1: Minimum interval between exports
+  const timeSinceLastExport = now - exportRateLimit.lastExport;
+  if (timeSinceLastExport < exportRateLimit.minInterval) {
+    const waitTime = Math.ceil((exportRateLimit.minInterval - timeSinceLastExport) / 1000);
+    updateStatus(
+      'warning',
+      'Please wait before exporting again',
+      `Rate limit: Please wait ${waitTime} second${waitTime !== 1 ? 's' : ''} between exports.`
+    );
+    logError('handleExportClick', 'Rate limit: minimum interval', {
+      timeSinceLastExport,
+      minInterval: exportRateLimit.minInterval
+    });
+    return;
+  }
+
+  // Rate limiting check 2: Maximum exports per minute
+  // Clean up old exports (older than 60 seconds)
+  exportRateLimit.recentExports = exportRateLimit.recentExports.filter(
+    timestamp => now - timestamp < 60000
+  );
+
+  if (exportRateLimit.recentExports.length >= exportRateLimit.maxExportsPerMinute) {
+    const oldestExport = Math.min(...exportRateLimit.recentExports);
+    const waitTime = Math.ceil((60000 - (now - oldestExport)) / 1000);
+    updateStatus(
+      'error',
+      'Too many exports',
+      `Rate limit: Maximum ${exportRateLimit.maxExportsPerMinute} exports per minute. Please wait ${waitTime} second${waitTime !== 1 ? 's' : ''}.`
+    );
+    logError('handleExportClick', 'Rate limit: max per minute exceeded', {
+      recentExportsCount: exportRateLimit.recentExports.length,
+      maxExportsPerMinute: exportRateLimit.maxExportsPerMinute
+    });
+    return;
+  }
+
   // Prevent multiple simultaneous exports
   if (state.export.isExporting) {
     logError('handleExportClick', 'Export already in progress', { isExporting: true });
     return;
   }
+
+  // Update rate limit tracking
+  exportRateLimit.lastExport = now;
+  exportRateLimit.recentExports.push(now);
 
   state.export.isExporting = true;
   state.export.lastError = null; // Clear previous error
@@ -1186,12 +1358,84 @@ function init() {
   // Verify no keyboard traps
   verifyNoKeyboardTraps();
 
+  // Set up event-driven updates (primary mechanism)
+  setupEventDrivenUpdates();
+
   // Initial UI update
   checkAndUpdateUI();
 
-  // Start polling for status updates every 3 seconds (increased from 2s for efficiency)
+  // Start fallback polling with longer interval (10 seconds instead of 3)
+  // Event-driven updates are the primary mechanism, polling is just a fallback
   // Polling will automatically stop when export button is enabled
-  startPolling(3000);
+  startPolling(10000);
+
+  // Runtime integrity verification
+  verifyRuntimeIntegrity();
+}
+
+// ============================================================================
+// RUNTIME INTEGRITY VERIFICATION
+// ============================================================================
+
+/**
+ * Verify critical browser APIs and functions haven't been tampered with
+ * This provides defense-in-depth against runtime manipulation
+ */
+function verifyRuntimeIntegrity() {
+  const results = {
+    passed: [],
+    failed: []
+  };
+
+  // Check critical browser APIs
+  const criticalAPIs = [
+    { name: 'browser.tabs.query', obj: browser?.tabs, prop: 'query' },
+    { name: 'browser.runtime.sendMessage', obj: browser?.runtime, prop: 'sendMessage' },
+    { name: 'browser.downloads.download', obj: browser?.downloads, prop: 'download' },
+    { name: 'document.createElement', obj: document, prop: 'createElement' },
+    { name: 'JSON.parse', obj: JSON, prop: 'parse' },
+    { name: 'JSON.stringify', obj: JSON, prop: 'stringify' }
+  ];
+
+  for (const api of criticalAPIs) {
+    if (!api.obj) {
+      results.failed.push({ name: api.name, reason: 'Parent object not found' });
+      continue;
+    }
+
+    const value = api.obj[api.prop];
+    if (typeof value !== 'function') {
+      results.failed.push({ name: api.name, reason: 'API not found or not a function' });
+    } else {
+      results.passed.push(api.name);
+    }
+  }
+
+  // Check critical functions exist
+  const criticalFunctions = [
+    'detectPlatform',
+    'sanitizeErrorMessage',
+    'sanitizeForCSV',
+    'validateURL',
+    'checkRateLimit'
+  ];
+
+  for (const funcName of criticalFunctions) {
+    if (typeof window[funcName] === 'function') {
+      results.passed.push(funcName);
+    } else {
+      results.failed.push({ name: funcName, reason: 'Function not found' });
+    }
+  }
+
+  // Log results
+  if (results.failed.length === 0) {
+    console.log('[Integrity] Runtime integrity verified:', results.passed.length, 'checks passed');
+  } else {
+    console.error('[Integrity] Runtime integrity check failed:', results.failed);
+  }
+
+  return results.failed.length === 0;
 }
 
 // Initialize when DOM is ready

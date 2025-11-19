@@ -7,12 +7,15 @@
 
 /**
  * Escapes a field value for CSV format according to RFC 4180
- * 
+ * Also prevents CSV injection attacks
+ *
  * Rules:
  * - Fields containing comma, quote, or newline must be wrapped in quotes
  * - Quotes within fields must be escaped by doubling them
  * - Empty/null values become empty strings
- * 
+ * - Values starting with dangerous characters (=, +, -, @, tab, CR) are prefixed with single quote
+ *   to prevent formula execution in Excel/Google Sheets
+ *
  * @param {*} value - The value to escape
  * @returns {string} Escaped CSV field value
  */
@@ -23,10 +26,19 @@ function escapeCSVField(value) {
   }
 
   // Convert to string
-  const stringValue = String(value);
+  let stringValue = String(value);
+
+  // Prevent CSV injection: sanitize values starting with dangerous characters
+  // These characters can trigger formula execution in Excel/LibreOffice/Google Sheets
+  // = (formula), + (formula), - (formula), @ (formula), \t (tab), \r (carriage return)
+  const dangerousChars = ['=', '+', '-', '@', '\t', '\r'];
+  if (dangerousChars.some(char => stringValue.startsWith(char))) {
+    // Prefix with single quote to treat as text
+    stringValue = "'" + stringValue;
+  }
 
   // Check if field needs escaping (contains comma, quote, or newline)
-  if (stringValue.includes(',') || stringValue.includes('"') || 
+  if (stringValue.includes(',') || stringValue.includes('"') ||
       stringValue.includes('\n') || stringValue.includes('\r')) {
     // Escape quotes by doubling them, then wrap in quotes
     return '"' + stringValue.replace(/"/g, '""') + '"';
