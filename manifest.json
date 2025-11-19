@@ -2,6 +2,12 @@
   "manifest_version": 3,
   "name": "AI Chat Exporter",
   "version": "2.0.0",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ai-chat-exporter@daniel.jurg.vub.be",
+      "update_url": "https://raw.githubusercontent.com/dj-urg/AI-Dialogue-Insight-Extension/main/updates.json"
+    }
+  },
   "description": "Export conversations from ChatGPT, Claude, and Co-pilot to CSV. All processing happens locally in your browser.",
   "permissions": [
     "activeTab",
@@ -60,7 +66,6 @@
       ],
       "run_at": "document_start"
     },
-
     {
       "matches": [
         "https://copilot.microsoft.com/*",
