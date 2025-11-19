@@ -1,16 +1,20 @@
 # AI Chat Exporter
 
+> [!WARNING]
+> **Development Preview**: This extension is currently in active development. Please approach results with caution. If you encounter any bugs or errors, please report them.
+
 A Firefox extension that exports chats from ChatGPT and Claude into CSV files. All processing happens locally in your browser - no data is sent to external servers.
 
 ## Features
 
 - **Export to CSV**: Convert chat conversations into spreadsheet-compatible CSV format
-- **Multi-platform support**: Works with ChatGPT (chatgpt.com) and Claude (claude.ai)
+- **Multi-platform support**: Works with ChatGPT (chatgpt.com), Claude (claude.ai), and Copilot (copilot.microsoft.com)
 - **Privacy-focused**: All extraction and conversion happens client-side
 - **Simple interface**: One-click export from the browser toolbar
 - **No dependencies**: Pure JavaScript with no external libraries
 - **Advanced ChatGPT support**: Exports both conversation metadata and full message history with support for thoughts, tools, and multimodal content
 - **Claude support**: Exports Claude conversations with full message history, content blocks, and parent-child relationships
+- **Copilot support**: Exports Copilot conversations with full message history, content blocks, and parent-child relationships
 
 ## Supported Platforms
 
@@ -51,6 +55,14 @@ A Firefox extension that exports chats from ChatGPT and Claude into CSV files. A
 3. A popup will appear showing the current page status
 4. Click "Export this chat to CSV"
 5. A CSV file will be downloaded named `claude_conversation_TIMESTAMP.csv`
+
+### Copilot
+
+1. Navigate to any Copilot conversation at https://copilot.microsoft.com/* or https://copilotstudio.microsoft.com/*
+2. Click the AI Chat Exporter icon in your browser toolbar
+3. A popup will appear showing the current page status
+4. Click "Export this chat to CSV"
+5. A CSV file will be downloaded named `copilot_conversation_TIMESTAMP.csv`
 
 ### CSV Format
 
@@ -101,10 +113,27 @@ A Firefox extension that exports chats from ChatGPT and Claude into CSV files. A
 - **truncated**: Boolean indicating if message was truncated
 - **stop_reason**: Reason assistant stopped generating (if applicable)
 
+#### Copilot
+
+**Single CSV** - One row per message:
+- **conversation_id**: Unique conversation identifier
+- **message_id**: Unique message identifier
+- **role**: Message author role (user, assistant)
+- **text**: Extracted text content
+- **created_at**: Message timestamp
+- **channel**: Source channel (e.g., bing)
+- **mode**: Conversation mode (e.g., balanced, creative, precise)
+- **part_ids**: Comma-separated IDs of content parts
+- **author_type**: Original author type from API
+
 **Key Features:**
 - Handles Claude's content block array structure (multiple text blocks concatenated with `\n\n`)
 - Preserves parent-child message relationships
 - ISO 8601 timestamps for easy parsing
+- Includes conversation metadata in each row
+- Handles Copilot's multi-part content structure (concatenates text parts)
+- Maps author types to standard roles (user/assistant)
+- Captures conversation mode (Creative, Balanced, Precise) and channel
 - Includes conversation metadata in each row
 
 All CSV files are UTF-8 encoded and follow RFC 4180 standards, making them compatible with Excel, Google Sheets, R, Python pandas, and other data analysis tools.
@@ -116,6 +145,7 @@ All CSV files are UTF-8 encoded and follow RFC 4180 standards, making them compa
 - **Minimal permissions**: Only requests `activeTab` and `tabs` permissions
 - **Open source**: All code is available for inspection and audit
 - **No obfuscation**: Plain JavaScript with clear comments
+- **Active Fetch**: The extension may perform background fetches to the AI provider's API (e.g., ChatGPT, Claude) on your behalf to retrieve the full history of the current conversation. This is necessary to ensure complete data export and is only triggered by your actions.
 
 ## Troubleshooting
 
@@ -219,34 +249,9 @@ If you encounter extraction issues:
 
 ## Development
 
-### Project Structure
-
-```
-ai-chat-exporter/
-├── manifest.json           # Extension configuration
-├── background.js           # Background script with platform handlers
-├── popup.html              # Popup UI structure
-├── popup.js                # Popup logic and messaging
-├── config/
-│   └── settings.js         # Platform configuration
-├── platforms/
-│   ├── chatgpt/
-│   │   ├── content.js      # ChatGPT content script
-│   │   └── inject.js       # ChatGPT API interceptor
-│   └── claude/
-│       ├── content.js      # Claude content script
-│       └── inject.js       # Claude API interceptor
-├── utils/
-│   ├── csv.js              # CSV generation utilities used by runtime
-│   └── helpers.js          # General helper functions
-├── testing/                # Test files, helpers (including flatten utilities), and test data
-├── icon.png                # Extension icon
-└── README.md               # This file
-```
-
 ### Technical Details
 
-- **Manifest Version**: V2 (for maximum Firefox compatibility)
+- **Manifest Version**: V3 (for maximum Firefox compatibility)
 - **JavaScript**: ES6+ (const/let, arrow functions, template literals)
 - **Architecture**: Modular platform-specific handlers with shared utilities
 - **Data Capture**: API interception via fetch hooks (no DOM scraping)
@@ -257,26 +262,6 @@ ai-chat-exporter/
   - `browser.runtime.sendMessage()` - Content script to background communication
   - `browser.downloads` - Trigger CSV file downloads
   - Blob API - Create CSV files
-
-### Testing
-
-Manual testing checklist:
-
-1. Install extension in Firefox
-2. Test on ChatGPT conversation → verify export works
-3. Test on Claude conversation → verify export works
-4. Test on unsupported site → verify error message
-5. Open exported CSV in Excel/Google Sheets → verify formatting
-6. Test with special characters (quotes, commas, newlines) → verify escaping
-7. Check browser console → verify capture logs appear
-8. Check network tab → verify no external requests
-
-Automated testing:
-
-- `tests/test_chatgpt_extractor.js` - ChatGPT data extraction tests
-- `tests/test_claude_extractor.js` - Claude data extraction tests
-- `tests/test_flatten_utility.js` - Object flattening tests
-- Test data in `tests/chatgpt.com/` and `tests/claude.ai/`
 
 ### Architecture Highlights
 
@@ -290,6 +275,7 @@ This extension uses a robust architecture for reliable data capture:
 2. **Modular Platform Handlers**: Each platform has dedicated processing logic
    - `ChatGPTHandler` - Handles hierarchical message mapping
    - `ClaudeHandler` - Handles flat message array structure
+   - `CopilotHandler` - Handles flat message array structure
    - Shared CSV utilities for consistent output
 
 3. **Three-Layer Communication**:
@@ -312,38 +298,4 @@ Contributions are welcome! Areas for improvement:
 - Internationalization (i18n)
 - Chrome Web Store publication
 
-## License
 
-[Add your license here]
-
-## Changelog
-
-### Version 2.1.0 (2024-11-18)
-- **NEW**: Claude.ai conversation export support
-- **NEW**: ClaudeHandler for flat message array processing
-- **NEW**: Support for Claude's content block array structure
-- Added Claude inject and content scripts
-- ISO 8601 timestamp handling for Claude
-- Updated documentation for Claude platform
-- Added test suite for Claude extraction
-
-### Version 2.0.0
-- Code cleanup and consolidation
-- Removed duplicate files and utilities
-- Consolidated CSV and flatten utilities
-- Integrated platform handlers into main background script
-- Updated architecture documentation
-
-### Version 1.2.0
-- **NEW**: ChatGPT conversation export support
-- **NEW**: Dual CSV output for ChatGPT (metadata + messages)
-- **NEW**: Support for ChatGPT thoughts, tools, and multimodal content
-- Added ChatGPT domains to supported sites
-- Updated manifest permissions for ChatGPT API access
-- Created dedicated content script for ChatGPT
-- Added test suite for ChatGPT extraction
-
-### Version 1.0.0
-- Initial release
-- Basic CSV export functionality
-- Client-side processing
