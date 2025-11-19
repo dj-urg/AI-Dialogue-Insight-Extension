@@ -65,9 +65,66 @@ $RECYCLE.BIN/
 # IDE and Editor Files
 # ============================================================================
 
+
+tests
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+https:
+
 # VSCode
 .vscode/
 *.code-workspace
+.kiro
 
 # Kiro
 .kiro/
@@ -140,6 +197,13 @@ yarn.lock
 # Testing and Coverage
 # ============================================================================
 
+# Test output files in root directory only (allow tests/*.csv)
+/testing
+/*.csv
+/conversation_*.csv
+/chatgpt_*.csv
+
+# Test coverage
 coverage/
 .nyc_output/
 *.lcov

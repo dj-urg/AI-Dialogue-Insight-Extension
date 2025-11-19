@@ -1,93 +1,118 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <style>
-    body {
-      width: 300px;
-      padding: 16px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      margin: 0;
-    }
-    
-    h3 {
-      margin: 0 0 12px 0;
-      font-size: 16px;
-      font-weight: 600;
-      color: #333;
-    }
-    
-    #status {
-      margin-bottom: 16px;
-      padding: 8px;
-      border-radius: 4px;
-      font-size: 13px;
-      line-height: 1.4;
-    }
-    
-    #status.supported {
-      background-color: #e8f5e9;
-      color: #2e7d32;
-      border: 1px solid #a5d6a7;
-    }
-    
-    #status.unsupported {
-      background-color: #fff3e0;
-      color: #e65100;
-      border: 1px solid #ffcc80;
-    }
-    
-    #status.error {
-      background-color: #ffebee;
-      color: #c62828;
-      border: 1px solid #ef9a9a;
-    }
-    
-    #exportBtn {
-      width: 100%;
-      padding: 10px;
-      background-color: #1976d2;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background-color 0.2s;
-    }
-    
-    #exportBtn:hover:not(:disabled) {
-      background-color: #1565c0;
-    }
-    
-    #exportBtn:disabled {
-      background-color: #bdbdbd;
-      cursor: not-allowed;
-    }
-
-    #privacyNotice {
-      margin-top: 16px;
-      padding: 8px;
-      background-color: #f5f5f5;
-      border-left: 3px solid #1976d2;
-      font-size: 11px;
-      line-height: 1.4;
-      color: #666;
-    }
-
-    #privacyNotice strong {
-      color: #333;
-      font-weight: 600;
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Chat Exporter</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <h3>AI Chat Exporter</h3>
-  <div id="status"></div>
-  <button id="exportBtn">Export this chat to CSV</button>
-  <div id="privacyNotice">
-    <strong>🔒 Privacy:</strong> All processing happens locally in your browser. No data is sent to external servers or stored permanently.
-  </div>
+  <!-- Header Component -->
+  <header class="popup-header" role="banner">
+    <div class="popup-header__title">
+      <svg class="popup-header__icon" aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" fill="currentColor"/>
+      </svg>
+      <h1 class="popup-header__text">AI Chat Exporter</h1>
+    </div>
+    <div class="popup-header__platform" id="platformBadge" aria-live="polite">
+      <!-- Platform badge inserted dynamically -->
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="popup-main" role="main">
+    <!-- Status Card Component -->
+    <div class="status-card status-card--info" role="status" aria-live="polite" aria-atomic="true">
+      <div class="status-card__icon" aria-hidden="true">
+        <!-- Success Icon (Checkmark) -->
+        <svg class="icon icon--success" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" fill="currentColor"/>
+        </svg>
+        <!-- Warning Icon (Alert Triangle) -->
+        <svg class="icon icon--warning" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" fill="currentColor"/>
+        </svg>
+        <!-- Error Icon (X Circle) -->
+        <svg class="icon icon--error" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" fill="currentColor"/>
+        </svg>
+        <!-- Loading Icon (Spinner) -->
+        <div class="icon icon--loading spinner" role="status" aria-label="Loading">
+          <svg class="spinner__svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <circle class="spinner__circle" cx="12" cy="12" r="10"></circle>
+          </svg>
+        </div>
+        <!-- Info Icon (Info Circle) -->
+        <svg class="icon icon--info" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" fill="currentColor"/>
+        </svg>
+      </div>
+      <div class="status-card__content">
+        <p class="status-card__message" id="statusMessage">
+          Checking page...
+        </p>
+        <p class="status-card__detail" id="statusDetail">
+          <!-- Optional additional details -->
+        </p>
+      </div>
+    </div>
+
+    <!-- Primary Action Button -->
+    <button 
+      class="btn btn--primary btn--large" 
+      id="exportBtn"
+      type="button"
+      aria-label="Export conversation to CSV file"
+      disabled>
+      <svg class="btn__icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8.75 1a.75.75 0 00-1.5 0v6.69L5.03 5.47a.75.75 0 00-1.06 1.06l3.5 3.5a.75.75 0 001.06 0l3.5-3.5a.75.75 0 10-1.06-1.06L8.75 7.69V1z" fill="currentColor"/>
+        <path d="M3.5 9.75a.75.75 0 00-1.5 0v1.5A2.75 2.75 0 004.75 14h6.5A2.75 2.75 0 0014 11.25v-1.5a.75.75 0 00-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5z" fill="currentColor"/>
+      </svg>
+      <span class="btn__text">Export to CSV</span>
+    </button>
+
+    <!-- Collapsible Info Section -->
+    <details class="info-section" id="infoSection" role="group" aria-label="Extension information">
+      <summary class="info-section__toggle" aria-label="Toggle extension information">
+        <svg class="info-section__icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M8 14.5a6.5 6.5 0 100-13 6.5 6.5 0 000 13zM8 16A8 8 0 108 0a8 8 0 000 16z" fill="currentColor"/>
+          <path d="M8 7a1 1 0 011 1v3a1 1 0 11-2 0V8a1 1 0 011-1zM8 6a1 1 0 100-2 1 1 0 000 2z" fill="currentColor"/>
+        </svg>
+        <span class="info-section__title">About this extension</span>
+        <svg class="info-section__chevron" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </summary>
+      <div class="info-section__content">
+        <div class="info-section__block">
+          <h3 class="info-section__heading">What this does</h3>
+          <ul class="info-section__list">
+            <li>Extracts conversations from the current page</li>
+            <li>Converts data to CSV format locally</li>
+            <li>Downloads file to your computer</li>
+          </ul>
+        </div>
+        <div class="info-section__block">
+          <h3 class="info-section__heading">Privacy</h3>
+          <ul class="info-section__list">
+            <li>All processing happens in your browser</li>
+            <li>No data sent to external servers</li>
+            <li>No permanent storage of conversations</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+  </main>
+
+  <!-- Footer Component -->
+  <footer class="popup-footer" role="contentinfo">
+    <svg class="popup-footer__icon" aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M6 1a2 2 0 00-2 2v1H3a1 1 0 00-1 1v5a1 1 0 001 1h6a1 1 0 001-1V5a1 1 0 00-1-1H8V3a2 2 0 00-2-2zM5.5 3a.5.5 0 01.5-.5.5.5 0 01.5.5v1h-1V3z" fill="currentColor"/>
+    </svg>
+    <p class="popup-footer__text">All data stays local in your browser</p>
+  </footer>
+
   <script src="popup.js"></script>
 </body>
 </html>

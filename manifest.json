@@ -1,13 +1,54 @@
 {
   "manifest_version": 2,
   "name": "AI Chat Exporter",
-  "version": "1.0.1",
-  "description": "Export Claude and DeepSeek public chats to CSV. All processing happens locally - no data leaves your browser.",
+  "version": "2.0.0",
+  "description": "Export conversations from ChatGPT, Claude, DeepSeek, Gemini, and Co-pilot to CSV. All processing happens locally in your browser.",
   "permissions": [
-    "activeTab"
+    "activeTab",
+    "downloads"
   ],
-  "content_security_policy": "script-src 'self'; object-src 'none';",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": ["platforms/chatgpt/content.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://claude.ai/chat/*"
+      ],
+      "js": ["platforms/claude/content.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://chat.deepseek.com/*",
+        "https://deepseek.com/*"
+      ],
+      "js": ["platforms/deepseek/content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://copilot.microsoft.com/*",
+        "https://copilotstudio.microsoft.com/*"
+      ],
+      "js": ["platforms/copilot/content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "background": {
+    "scripts": [
+      "platforms/chatgpt/extractor.js",
+      "background.js"
+    ],
+    "persistent": false
+  },
   "browser_action": {
+    "default_title": "Export Chat",
     "default_popup": "popup.html",
     "default_icon": {
       "48": "icon.png"
@@ -15,5 +56,11 @@
   },
   "icons": {
     "48": "icon.png"
-  }
+  },
+  "web_accessible_resources": [
+    "platforms/chatgpt/inject.js",
+    "platforms/claude/inject.js",
+    "platforms/copilot/inject.js"
+  ],
+  "content_security_policy": "script-src 'self'; object-src 'none';"
 }

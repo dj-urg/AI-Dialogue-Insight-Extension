@@ -1,19 +1,26 @@
 # AI Chat Exporter
 
-A Firefox extension that exports publicly shared chats from Claude and DeepSeek into CSV files. All processing happens locally in your browser - no data is sent to external servers.
+A Firefox extension that exports chats from ChatGPT and Claude into CSV files. All processing happens locally in your browser - no data is sent to external servers.
 
 ## Features
 
 - **Export to CSV**: Convert chat conversations into spreadsheet-compatible CSV format
-- **Multi-platform support**: Works with Claude (claude.ai) and DeepSeek (chat.deepseek.com)
+- **Multi-platform support**: Works with ChatGPT (chatgpt.com) and Claude (claude.ai)
 - **Privacy-focused**: All extraction and conversion happens client-side
 - **Simple interface**: One-click export from the browser toolbar
 - **No dependencies**: Pure JavaScript with no external libraries
+- **Advanced ChatGPT support**: Exports both conversation metadata and full message history with support for thoughts, tools, and multimodal content
+- **Claude support**: Exports Claude conversations with full message history, content blocks, and parent-child relationships
 
 ## Supported Platforms
 
-- **Claude**: https://claude.ai/* and https://*.claude.ai/*
-- **DeepSeek**: https://chat.deepseek.com/* and https://*.deepseek.com/*
+- **ChatGPT**: https://chatgpt.com/* and https://chat.openai.com/* (Fully supported)
+- **Claude**: https://claude.ai/chat/* (Fully supported)
+
+### Planned Platforms
+- **DeepSeek**: https://chat.deepseek.com/* (Coming soon)
+- **Gemini**: https://gemini.google.com/* (Coming soon)
+- **Copilot**: https://copilot.microsoft.com/* (Coming soon)
 
 ## Installation
 
@@ -31,23 +38,80 @@ A Firefox extension that exports publicly shared chats from Claude and DeepSeek 
 
 ## Usage
 
-1. Navigate to a public chat page on Claude or DeepSeek
+### ChatGPT
+
+1. Navigate to any ChatGPT conversation (you must be logged in)
 2. Click the AI Chat Exporter icon in your browser toolbar
 3. A popup will appear showing the current page status
 4. Click "Export this chat to CSV"
-5. The chat will be downloaded as a CSV file named `chat_export_YYYYMMDD_HHMM.csv`
+5. Two CSV files will be downloaded:
+   - `chatgpt_metadata_TIMESTAMP.csv` - Conversation metadata (one row)
+   - `chatgpt_messages_TIMESTAMP.csv` - All messages in the conversation
+
+### Claude
+
+1. Navigate to any Claude conversation at https://claude.ai/chat/*
+2. Click the AI Chat Exporter icon in your browser toolbar
+3. A popup will appear showing the current page status
+4. Click "Export this chat to CSV"
+5. A CSV file will be downloaded named `claude_conversation_TIMESTAMP.csv`
 
 ### CSV Format
 
-The exported CSV contains the following columns:
+#### ChatGPT
 
-- **index**: Sequential message number (0-based)
-- **role**: Message sender ("user", "assistant", "system", or "other")
-- **timestamp**: Message timestamp (if available)
-- **content**: Plain text message content with preserved structure
-- **source**: Platform name ("claude" or "deepseek")
+**Metadata CSV (CSV A)** - One row per conversation:
+- **conversation_id**: Unique conversation identifier
+- **title**: Conversation title
+- **create_time**: Unix timestamp for conversation start
+- **update_time**: Unix timestamp for last update
+- **default_model_slug**: Model used (e.g., gpt-5-1)
+- **memory_scope**: Memory setting (e.g., global_enabled)
+- **is_do_not_remember**: Boolean flag for memory opt-out
+- **num_messages**: Total count of all messages
+- **num_user_messages**: Count of user messages
+- **num_assistant_messages**: Count of assistant messages
+- **num_tool_messages**: Count of tool messages
+- **user_editable_context**: User profile and custom instructions (JSON string)
 
-The CSV file is UTF-8 encoded and follows RFC 4180 standards, making it compatible with Excel, Google Sheets, and other spreadsheet applications.
+**Messages CSV (CSV B)** - One row per message/node:
+- **conversation_id**: Links to metadata CSV
+- **node_id**: Unique message/node identifier
+- **parent_id**: Parent node ID (conversation graph structure)
+- **author_role**: Message author (user, assistant, tool, system)
+- **content_type**: Type of content (text, thoughts, multimodal_text, etc.)
+- **text**: Extracted text content
+- **has_image**: Boolean indicating if message contains images
+- **image_ids**: Comma-separated image asset pointers
+- **create_time**: Message timestamp
+- **status**: Message status (e.g., finished_successfully)
+- **end_turn**: Boolean indicating end of turn
+- **is_visually_hidden**: Boolean indicating if message is hidden in UI
+- **model_slug**: Model used for this specific message
+- **tool_name**: Tool name (if author_role is "tool")
+
+#### Claude
+
+**Single CSV** - One row per message:
+- **conversation_id**: Unique conversation identifier (UUID)
+- **conversation_name**: Title of the conversation
+- **message_id**: Unique message identifier (UUID)
+- **parent_message_id**: Parent message UUID (for conversation threading)
+- **sender**: Message author ("human" or "assistant")
+- **text**: Extracted text content from content blocks
+- **created_at**: Message creation timestamp (ISO 8601 format)
+- **updated_at**: Message update timestamp (ISO 8601 format)
+- **index**: Sequential message number in conversation
+- **truncated**: Boolean indicating if message was truncated
+- **stop_reason**: Reason assistant stopped generating (if applicable)
+
+**Key Features:**
+- Handles Claude's content block array structure (multiple text blocks concatenated with `\n\n`)
+- Preserves parent-child message relationships
+- ISO 8601 timestamps for easy parsing
+- Includes conversation metadata in each row
+
+All CSV files are UTF-8 encoded and follow RFC 4180 standards, making them compatible with Excel, Google Sheets, R, Python pandas, and other data analysis tools.
 
 ## Privacy & Security
 
@@ -61,21 +125,22 @@ The CSV file is UTF-8 encoded and follows RFC 4180 standards, making it compatib
 
 ### "This page is not supported" message
 
-**Cause**: You're on a page that isn't a Claude or DeepSeek chat.
+**Cause**: You're on a page that isn't a ChatGPT or Claude chat.
 
-**Solution**: Navigate to a public chat page on claude.ai or chat.deepseek.com and try again.
+**Solution**: Navigate to a chat page on chatgpt.com or claude.ai/chat/* and try again.
 
-### "No messages found on this page" alert
+### "No conversation data captured" message
 
-**Cause**: The extension couldn't find any chat messages on the page. This may happen if:
+**Cause**: The extension hasn't captured conversation data yet. This may happen if:
 - The page hasn't fully loaded yet
-- The chat is empty
-- The DOM structure has changed and selectors need updating
+- The conversation is empty
+- The API interception hasn't triggered
 
 **Solution**: 
 1. Wait for the page to fully load and try again
-2. Refresh the page and retry
-3. If the issue persists, the selectors may need updating (see below)
+2. Refresh the page to trigger API calls
+3. Navigate to a different conversation and back
+4. Check browser console (F12) for capture confirmation messages
 
 ### "Failed to extract chat" alert
 
@@ -96,6 +161,42 @@ The CSV file is UTF-8 encoded and follows RFC 4180 standards, making it compatib
 2. Use "Data" → "From Text/CSV" instead of double-clicking the file
 3. Ensure UTF-8 encoding is selected
 
+### ChatGPT: "Failed to fetch conversation data" (404 error)
+
+**Cause**: The extension couldn't extract conversation data from the page or API.
+
+**Solution**:
+1. **Refresh the page** - Make sure the conversation is fully loaded
+2. **Check you're logged in** - You must be logged into ChatGPT
+3. **Wait a moment** - Let the page fully load before clicking export
+4. **Use debug tool** - Open `CHATGPT_DEBUG_BOOKMARKLET.html` for detailed diagnostics
+5. **Manual extraction** - See `DEBUG_CHATGPT.md` for alternative methods
+
+**Debug in console (F12)**:
+- ✅ "Found conversation data in __NEXT_DATA__" - Working correctly
+- ⚠️ "Data not found on page, trying API fetch..." - Using fallback method
+- ❌ "API fetch also failed" - Both methods failed
+
+If both methods fail, ChatGPT may have changed their page structure. Use the manual extraction method in `DEBUG_CHATGPT.md`.
+
+### Claude: "No conversation data captured"
+
+**Cause**: The extension hasn't intercepted Claude API responses yet.
+
+**Solution**:
+1. **Refresh the page** - This triggers the API calls that the extension intercepts
+2. **Check console logs** - Open browser console (F12) and look for:
+   - ✅ "[Claude] Fetch interceptor installed" - Extension loaded correctly
+   - ✅ "[Claude] ✓ Captured conversation data" - Data captured successfully
+3. **Navigate within Claude** - Switch to another conversation and back
+4. **Verify URL** - Ensure you're on a URL matching `https://claude.ai/chat/*`
+
+**Debug checklist**:
+- Extension is enabled in `about:addons`
+- You're on a Claude conversation page (not the home page)
+- Browser console shows no errors
+- Content script is injected (check for "[Claude]" logs)
+
 ### Extension icon is grayed out or unresponsive
 
 **Cause**: Permission or installation issue.
@@ -105,55 +206,20 @@ The CSV file is UTF-8 encoded and follows RFC 4180 standards, making it compatib
 2. Try reloading the extension from `about:debugging`
 3. Ensure you're using a recent version of Firefox
 
-## Updating DOM Selectors
+## API Changes and Updates
 
-Chat platforms occasionally update their HTML structure, which may break message extraction. When this happens, the selectors need to be updated.
+ChatGPT and Claude use API interception rather than DOM scraping, making the extension more resilient to UI changes. However, if the platforms change their API structure, the extension may need updates.
 
-### How to Update Selectors
+### Reporting API Issues
 
-1. Open the browser console (F12) on the affected chat page
-2. Inspect the DOM structure of chat messages
-3. Identify the correct CSS selectors for:
-   - Message container elements
-   - User vs assistant message indicators
-   - Timestamp elements
-   - Message content blocks
-
-4. Edit `content.js` and update the appropriate selector constants:
-
-```javascript
-// For Claude
-const CLAUDE_SELECTORS = {
-  messageContainer: '[data-testid="conversation-turn"]',  // Update this
-  userMessage: '.user-message',                           // Update this
-  assistantMessage: '.assistant-message',                 // Update this
-  timestamp: 'time',                                      // Update this
-  contentBlock: '.message-content'                        // Update this
-};
-
-// For DeepSeek
-const DEEPSEEK_SELECTORS = {
-  messageContainer: '.chat-message',                      // Update this
-  userMessage: '.message-user',                           // Update this
-  assistantMessage: '.message-assistant',                 // Update this
-  timestamp: '.message-time',                             // Update this
-  contentBlock: '.message-text'                           // Update this
-};
-```
-
-5. Reload the extension in `about:debugging`
-6. Test the export functionality
-
-### Reporting Selector Issues
-
-If you encounter extraction issues and aren't comfortable updating selectors yourself:
+If you encounter extraction issues:
 
 1. Open an issue on the project repository
 2. Include:
-   - The platform (Claude or DeepSeek)
+   - The platform (ChatGPT or Claude)
    - The date when extraction stopped working
    - Browser console errors (if any)
-   - A screenshot of the chat page structure (F12 → Elements tab)
+   - Console logs showing "[Platform] Fetch interceptor installed" status
 
 ## Development
 
@@ -161,45 +227,95 @@ If you encounter extraction issues and aren't comfortable updating selectors you
 
 ```
 ai-chat-exporter/
-├── manifest.json      # Extension configuration
-├── popup.html         # Popup UI structure
-├── popup.js           # Popup logic and script injection
-├── content.js         # Message extraction and CSV generation
-├── icon.png           # Extension icon (48x48)
-└── README.md          # This file
+├── manifest.json           # Extension configuration
+├── background.js           # Background script with platform handlers
+├── popup.html              # Popup UI structure
+├── popup.js                # Popup logic and messaging
+├── config/
+│   └── settings.js         # Platform configuration
+├── platforms/
+│   ├── chatgpt/
+│   │   ├── content.js      # ChatGPT content script
+│   │   └── inject.js       # ChatGPT API interceptor
+│   └── claude/
+│       ├── content.js      # Claude content script
+│       └── inject.js       # Claude API interceptor
+├── utils/
+│   ├── csv.js              # CSV generation utilities
+│   ├── flatten.js          # Object flattening utilities
+│   └── helpers.js          # General helper functions
+├── tests/                  # Test files and test data
+├── icon.png                # Extension icon
+└── README.md               # This file
 ```
 
 ### Technical Details
 
 - **Manifest Version**: V2 (for maximum Firefox compatibility)
 - **JavaScript**: ES6+ (const/let, arrow functions, template literals)
-- **APIs Used**: 
-  - `browser.tabs.query()` - Get active tab information
-  - `browser.tabs.executeScript()` - Inject content script
-  - DOM APIs - Extract message content
-  - Blob API - Create CSV file
+- **Architecture**: Modular platform-specific handlers with shared utilities
+- **Data Capture**: API interception via fetch hooks (no DOM scraping)
+- **Privacy**: All processing happens locally in the browser
+- **APIs Used**:
+  - `window.fetch` hook - Intercept API responses (inject scripts)
+  - `window.postMessage` - Page to content script communication
+  - `browser.runtime.sendMessage()` - Content script to background communication
+  - `browser.downloads` - Trigger CSV file downloads
+  - Blob API - Create CSV files
 
 ### Testing
 
 Manual testing checklist:
 
 1. Install extension in Firefox
-2. Test on Claude public chat → verify export works
-3. Test on DeepSeek public chat → verify export works
+2. Test on ChatGPT conversation → verify export works
+3. Test on Claude conversation → verify export works
 4. Test on unsupported site → verify error message
 5. Open exported CSV in Excel/Google Sheets → verify formatting
 6. Test with special characters (quotes, commas, newlines) → verify escaping
-7. Check browser console → verify no errors
+7. Check browser console → verify capture logs appear
 8. Check network tab → verify no external requests
+
+Automated testing:
+
+- `tests/test_chatgpt_extractor.js` - ChatGPT data extraction tests
+- `tests/test_claude_extractor.js` - Claude data extraction tests
+- `tests/test_flatten_utility.js` - Object flattening tests
+- Test data in `tests/chatgpt.com/` and `tests/claude.ai/`
+
+### Architecture Highlights
+
+This extension uses a robust architecture for reliable data capture:
+
+1. **API Interception**: Captures data directly from platform APIs rather than scraping DOM
+   - More reliable than DOM scraping
+   - Resilient to UI changes
+   - Gets complete conversation data
+
+2. **Modular Platform Handlers**: Each platform has dedicated processing logic
+   - `ChatGPTHandler` - Handles hierarchical message mapping
+   - `ClaudeHandler` - Handles flat message array structure
+   - Shared CSV utilities for consistent output
+
+3. **Three-Layer Communication**:
+   - Inject script (page context) → Content script (isolated) → Background script (processing)
+   - Secure message passing between contexts
+   - No data leakage between layers
+
+4. **Privacy-First Design**:
+   - All processing happens locally
+   - No external network requests
+   - No data storage or tracking
 
 ## Contributing
 
 Contributions are welcome! Areas for improvement:
 
-- Support for additional platforms (ChatGPT, Gemini, etc.)
+- Support for additional platforms (DeepSeek, Gemini, Copilot)
 - Additional export formats (JSON, Markdown)
-- Automated selector testing
+- Automated testing improvements
 - Internationalization (i18n)
+- Chrome Web Store publication
 
 ## License
 
@@ -207,8 +323,32 @@ Contributions are welcome! Areas for improvement:
 
 ## Changelog
 
+### Version 2.1.0 (2024-11-18)
+- **NEW**: Claude.ai conversation export support
+- **NEW**: ClaudeHandler for flat message array processing
+- **NEW**: Support for Claude's content block array structure
+- Added Claude inject and content scripts
+- ISO 8601 timestamp handling for Claude
+- Updated documentation for Claude platform
+- Added test suite for Claude extraction
+
+### Version 2.0.0
+- Code cleanup and consolidation
+- Removed duplicate files and utilities
+- Consolidated CSV and flatten utilities
+- Integrated platform handlers into main background script
+- Updated architecture documentation
+
+### Version 1.2.0
+- **NEW**: ChatGPT conversation export support
+- **NEW**: Dual CSV output for ChatGPT (metadata + messages)
+- **NEW**: Support for ChatGPT thoughts, tools, and multimodal content
+- Added ChatGPT domains to supported sites
+- Updated manifest permissions for ChatGPT API access
+- Created dedicated content script for ChatGPT
+- Added test suite for ChatGPT extraction
+
 ### Version 1.0.0
 - Initial release
-- Support for Claude and DeepSeek
-- CSV export functionality
+- Basic CSV export functionality
 - Client-side processing

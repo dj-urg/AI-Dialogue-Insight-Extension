@@ -1,23 +1,202 @@
-// Supported domains configuration
-const SUPPORTED_DOMAINS = {
-  claude: ['claude.ai'],
-  deepseek: ['chat.deepseek.com', 'deepseek.com']
+/**
+ * popup.js - Popup UI Logic
+ * 
+ * Multi-platform UI that:
+ * 1. Detects which platform the user is on
+ * 2. Shows status of captured conversations
+ * 3. Triggers export when user clicks button
+ */
+
+// ============================================================================
+// PLATFORM CONFIGURATION (Single Source of Truth)
+// ============================================================================
+
+const PLATFORMS = {
+  chatgpt: {
+    name: 'ChatGPT',
+    domains: ['chatgpt.com', 'chat.openai.com'],
+    icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" fill="currentColor"/></svg>',
+    requiresConversationId: true,
+    extractConversationId: (url) => {
+      const match = url.match(/\/c\/([a-f0-9-]+)/i);
+      return match ? match[1] : null;
+    }
+  },
+  claude: {
+    name: 'Claude',
+    domains: ['claude.ai'],
+    icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17.5 3.5L14 10l3.5 6.5L21 10l-3.5-6.5z" fill="currentColor"/><path d="M10 3.5L6.5 10 10 16.5 13.5 10 10 3.5z" fill="currentColor"/><path d="M6.5 10L3 16.5 6.5 23 10 16.5 6.5 10z" fill="currentColor"/></svg>',
+    requiresConversationId: false,
+    extractConversationId: () => null
+  },
+  copilot: {
+    name: 'Copilot',
+    domains: ['copilot.microsoft.com', 'copilotstudio.microsoft.com'],
+    icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"/><circle cx="8.5" cy="11" r="1.5" fill="currentColor"/><circle cx="15.5" cy="11" r="1.5" fill="currentColor"/><path d="M12 17c2.21 0 4-1.79 4-4h-8c0 2.21 1.79 4 4 4z" fill="currentColor"/></svg>',
+    requiresConversationId: true,
+    extractConversationId: (url) => {
+      const match = url.match(/\/chats\/([a-zA-Z0-9_-]+)/i);
+      return match ? match[1] : null;
+    }
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    domains: ['chat.deepseek.com', 'deepseek.com'],
+    icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M12 12l-7-3.5M12 12l7-3.5M12 12v8" stroke="currentColor" stroke-width="2"/></svg>',
+    requiresConversationId: false,
+    extractConversationId: () => null
+  },
+  gemini: {
+    name: 'Gemini',
+    domains: ['gemini.google.com'],
+    icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg>',
+    requiresConversationId: false,
+    extractConversationId: () => null
+  }
+};
+
+// ============================================================================
+// ERROR HANDLING CONFIGURATION
+// ============================================================================
+
+/**
+ * Error types and their corresponding user-friendly messages
+ */
+const ERROR_TYPES = {
+  NO_ACTIVE_TAB: {
+    message: 'Unable to access current tab',
+    detail: 'Please try closing and reopening the popup.',
+    troubleshooting: 'If the issue persists, try reloading the page or restarting your browser.'
+  },
+  UNSUPPORTED_PLATFORM: {
+    message: 'This page is not supported',
+    detail: 'Please navigate to a supported chat platform.',
+    troubleshooting: 'Supported platforms: ChatGPT, Claude, Copilot, DeepSeek, and Gemini.'
+  },
+  NO_CONVERSATION_ID: {
+    message: 'No conversation detected',
+    detail: 'Please open or start a conversation to export.',
+    troubleshooting: null // Platform-specific, set dynamically
+  },
+  CONTENT_SCRIPT_NOT_LOADED: {
+    message: 'Extension not ready',
+    detail: 'The page may still be loading.',
+    troubleshooting: 'Try refreshing the page and waiting a few seconds before exporting.'
+  },
+  NO_DATA_AVAILABLE: {
+    message: 'No conversation data found',
+    detail: 'The conversation may be empty or not yet loaded.',
+    troubleshooting: null // Platform-specific, set dynamically
+  },
+  EXPORT_FAILED: {
+    message: 'Export failed',
+    detail: 'An error occurred during export.',
+    troubleshooting: null // Platform-specific, set dynamically
+  },
+  PERMISSION_DENIED: {
+    message: 'Permission denied',
+    detail: 'Unable to access the page content.',
+    troubleshooting: 'Please check that the extension has permission to access this site in your browser settings.'
+  },
+  NETWORK_ERROR: {
+    message: 'Network error',
+    detail: 'Unable to communicate with the page.',
+    troubleshooting: 'Check your internet connection and try refreshing the page.'
+  },
+  UNKNOWN_ERROR: {
+    message: 'An unexpected error occurred',
+    detail: 'Please try again.',
+    troubleshooting: 'If the problem continues, try reloading the page or restarting your browser.'
+  }
 };
 
 /**
- * Determines the site type based on URL hostname
- * Uses exact match or endsWith to prevent false positives
- * @param {string} url - The URL to check
- * @returns {string|null} - 'claude', 'deepseek', or null if unsupported
+ * Platform-specific troubleshooting tips
  */
-function getSiteType(url) {
+const PLATFORM_TROUBLESHOOTING = {
+  chatgpt: {
+    noConversationId: 'Make sure you are on a conversation page (URL should contain /c/).',
+    noData: 'Try scrolling through the conversation to ensure all messages are loaded.',
+    exportFailed: 'Try refreshing the page and waiting for the conversation to fully load before exporting.'
+  },
+  claude: {
+    noData: 'Start a conversation first, then try exporting. Data is captured as you chat.',
+    exportFailed: 'Make sure you have sent at least one message in the conversation before exporting.'
+  },
+  copilot: {
+    noConversationId: 'Make sure you are on a conversation page (URL should contain /chats/).',
+    noData: 'Try scrolling through the conversation to ensure all messages are loaded.',
+    exportFailed: 'Try refreshing the page and waiting for the conversation to fully load before exporting.'
+  },
+  deepseek: {
+    noData: 'Start a conversation first, then try exporting. Data is captured as you chat.',
+    exportFailed: 'Make sure you have sent at least one message in the conversation before exporting.'
+  },
+  gemini: {
+    noData: 'Make sure you have an active conversation with at least one message.',
+    exportFailed: 'Try refreshing the page and waiting for the conversation to fully load before exporting.'
+  }
+};
+
+// ============================================================================
+// STATE MANAGEMENT
+// ============================================================================
+
+const state = {
+  // Current platform detection
+  platform: {
+    id: null,
+    name: null,
+    conversationId: null
+  },
+  
+  // Status information
+  status: {
+    type: 'info', // 'success' | 'warning' | 'error' | 'loading' | 'info'
+    message: '',
+    detail: ''
+  },
+  
+  // Export state
+  export: {
+    isExporting: false,
+    canExport: false,
+    lastError: null
+  },
+  
+  // Current tab information
+  currentTab: null,
+  
+  // Polling state
+  polling: {
+    intervalId: null,
+    isPolling: false,
+    lastUpdateTime: 0,
+    debounceTimeout: null
+  }
+};
+
+// ============================================================================
+// PLATFORM DETECTION
+// ============================================================================
+
+/**
+ * Detect platform from URL
+ * @param {string} url - The URL to check
+ * @returns {Object|null} Platform object with id and config, or null if not supported
+ */
+function detectPlatform(url) {
   try {
     const hostname = new URL(url).hostname;
     
-    for (const [site, domains] of Object.entries(SUPPORTED_DOMAINS)) {
-      // Use exact match or endsWith to avoid false positives like "evilclaude.ai.example.com"
-      if (domains.some(domain => hostname === domain || hostname.endsWith(`.${domain}`))) {
-        return site;
+    for (const [platformId, platformConfig] of Object.entries(PLATFORMS)) {
+      if (platformConfig.domains.some(domain => 
+        hostname === domain || hostname.endsWith(`.${domain}`)
+      )) {
+        return { 
+          id: platformId, 
+          ...platformConfig 
+        };
       }
     }
     
@@ -29,112 +208,933 @@ function getSiteType(url) {
 }
 
 /**
- * Updates the status message and button state based on current tab
- * @param {object} tab - The active tab object
+ * Check if platform requires and has a conversation ID
+ * @param {Object} platform - Platform object
+ * @param {string} url - Current URL
+ * @returns {Object} Object with hasConversationId and conversationId properties
  */
-function updateStatus(tab) {
-  const statusDiv = document.getElementById('status');
-  const exportBtn = document.getElementById('exportBtn');
+function checkConversationId(platform, url) {
+  if (!platform || !platform.requiresConversationId) {
+    return { hasConversationId: true, conversationId: null };
+  }
   
-  if (!tab || !tab.url) {
-    statusDiv.textContent = 'No active tab found.';
-    statusDiv.className = 'error';
-    exportBtn.disabled = true;
+  const conversationId = platform.extractConversationId(url);
+  return {
+    hasConversationId: conversationId !== null,
+    conversationId: conversationId
+  };
+}
+
+// ============================================================================
+// ERROR HANDLING UTILITIES
+// ============================================================================
+
+/**
+ * Sanitize error message to prevent exposure of sensitive data
+ * @param {string} message - Raw error message
+ * @returns {string} Sanitized error message
+ */
+function sanitizeErrorMessage(message) {
+  if (!message) return 'An error occurred';
+  
+  // Remove potential conversation IDs (UUIDs and similar patterns)
+  let sanitized = message.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '[conversation-id]');
+  
+  // Remove potential API keys or tokens
+  sanitized = sanitized.replace(/[a-zA-Z0-9_-]{20,}/g, '[token]');
+  
+  // Remove URLs that might contain sensitive query parameters
+  sanitized = sanitized.replace(/https?:\/\/[^\s]+/g, '[url]');
+  
+  // Truncate very long messages
+  if (sanitized.length > 200) {
+    sanitized = sanitized.substring(0, 197) + '...';
+  }
+  
+  return sanitized;
+}
+
+/**
+ * Log detailed error information to console for debugging
+ * @param {string} context - Context where error occurred
+ * @param {Error|string} error - Error object or message
+ * @param {Object} additionalInfo - Additional debugging information
+ */
+function logError(context, error, additionalInfo = {}) {
+  const timestamp = new Date().toISOString();
+  const errorMessage = error instanceof Error ? error.message : error;
+  const errorStack = error instanceof Error ? error.stack : null;
+  
+  console.group(`🔴 Error in ${context} [${timestamp}]`);
+  console.error('Message:', errorMessage);
+  
+  if (errorStack) {
+    console.error('Stack:', errorStack);
+  }
+  
+  if (Object.keys(additionalInfo).length > 0) {
+    console.error('Additional Info:', additionalInfo);
+  }
+  
+  console.error('Current State:', {
+    platform: state.platform,
+    export: state.export,
+    status: state.status
+  });
+  
+  console.groupEnd();
+}
+
+/**
+ * Log debug information to console
+ * @param {string} context - Context of the log
+ * @param {string} message - Log message
+ * @param {Object} additionalInfo - Additional debugging information
+ */
+function logDebug(context, message, additionalInfo = {}) {
+  const timestamp = new Date().toISOString();
+  
+  console.group(`ℹ️ ${context} [${timestamp}]`);
+  console.log('Message:', message);
+  
+  if (Object.keys(additionalInfo).length > 0) {
+    console.log('Details:', additionalInfo);
+  }
+  
+  console.groupEnd();
+}
+
+/**
+ * Get platform-specific troubleshooting tip
+ * @param {string} platformId - Platform identifier
+ * @param {string} errorType - Type of error (noConversationId, noData, exportFailed)
+ * @returns {string|null} Troubleshooting tip or null
+ */
+function getPlatformTroubleshooting(platformId, errorType) {
+  if (!platformId || !PLATFORM_TROUBLESHOOTING[platformId]) {
+    return null;
+  }
+  
+  return PLATFORM_TROUBLESHOOTING[platformId][errorType] || null;
+}
+
+/**
+ * Display error with appropriate messaging and troubleshooting
+ * @param {string} errorType - Error type from ERROR_TYPES
+ * @param {Object} options - Additional options
+ * @param {string} options.platformId - Platform ID for platform-specific tips
+ * @param {string} options.customDetail - Custom detail message
+ * @param {string} options.customTroubleshooting - Custom troubleshooting tip
+ * @param {Error|string} options.originalError - Original error for logging
+ */
+function displayError(errorType, options = {}) {
+  const errorConfig = ERROR_TYPES[errorType] || ERROR_TYPES.UNKNOWN_ERROR;
+  const { platformId, customDetail, customTroubleshooting, originalError } = options;
+  
+  // Log detailed error for debugging
+  if (originalError) {
+    logError(errorType, originalError, {
+      platformId,
+      errorType,
+      customDetail,
+      customTroubleshooting
+    });
+  }
+  
+  // Determine detail message
+  let detailMessage = customDetail || errorConfig.detail;
+  
+  // Determine troubleshooting tip
+  let troubleshootingTip = customTroubleshooting || errorConfig.troubleshooting;
+  
+  // Get platform-specific troubleshooting if available
+  if (platformId && !troubleshootingTip) {
+    const errorTypeKey = errorType.toLowerCase().replace(/_/g, '');
+    if (errorTypeKey.includes('conversation')) {
+      troubleshootingTip = getPlatformTroubleshooting(platformId, 'noConversationId');
+    } else if (errorTypeKey.includes('data')) {
+      troubleshootingTip = getPlatformTroubleshooting(platformId, 'noData');
+    } else if (errorTypeKey.includes('export') || errorTypeKey.includes('failed')) {
+      troubleshootingTip = getPlatformTroubleshooting(platformId, 'exportFailed');
+    }
+  }
+  
+  // Combine detail and troubleshooting
+  let fullDetail = detailMessage;
+  if (troubleshootingTip) {
+    fullDetail = `${detailMessage} ${troubleshootingTip}`;
+  }
+  
+  // Update UI with error
+  updateStatus('error', errorConfig.message, fullDetail);
+  
+  // Store error in state for potential retry logic
+  state.export.lastError = {
+    type: errorType,
+    message: errorConfig.message,
+    detail: fullDetail,
+    timestamp: Date.now()
+  };
+  
+  // Ensure export button is enabled for retry (unless it's a permanent error)
+  const permanentErrors = ['UNSUPPORTED_PLATFORM', 'PERMISSION_DENIED'];
+  if (!permanentErrors.includes(errorType)) {
+    // Re-enable button after a short delay to allow user to see error
+    setTimeout(() => {
+      if (!state.export.isExporting) {
+        updateExportButton(true);
+      }
+    }, 500);
+  } else {
+    updateExportButton(false);
+  }
+}
+
+// ============================================================================
+// UI UPDATE FUNCTIONS
+// ============================================================================
+
+/**
+ * Update platform badge in header
+ * @param {Object|null} platform - Platform object or null to clear badge
+ */
+function updatePlatformBadge(platform) {
+  const platformBadge = document.getElementById('platformBadge');
+  
+  if (!platform) {
+    platformBadge.innerHTML = '';
     return;
   }
   
-  const siteType = getSiteType(tab.url);
+  const badgeHTML = `
+    <div class="platform-badge platform-badge--${platform.id}">
+      <div class="platform-badge__icon" aria-hidden="true">
+        ${platform.icon}
+      </div>
+      <span class="platform-badge__name">${platform.name}</span>
+    </div>
+  `;
   
-  if (siteType) {
-    const siteName = siteType.charAt(0).toUpperCase() + siteType.slice(1);
-    statusDiv.textContent = `${siteName} chat detected. Ready to export.`;
-    statusDiv.className = 'supported';
-    exportBtn.disabled = false;
+  platformBadge.innerHTML = badgeHTML;
+}
+
+/**
+ * Update status card with message and type
+ * @param {string} type - Status type: 'success' | 'warning' | 'error' | 'loading' | 'info'
+ * @param {string} message - Main status message
+ * @param {string} detail - Optional detail message (empty string or null to hide)
+ */
+function updateStatus(type, message, detail = '') {
+  const statusCard = document.querySelector('.status-card');
+  const statusMessage = document.getElementById('statusMessage');
+  const statusDetail = document.getElementById('statusDetail');
+  
+  // Store current focus to maintain it during update
+  const activeElement = document.activeElement;
+  const activeElementId = activeElement?.id;
+  
+  // Validate status type
+  const validTypes = ['success', 'warning', 'error', 'loading', 'info'];
+  if (!validTypes.includes(type)) {
+    console.error(`Invalid status type: ${type}. Using 'info' as fallback.`);
+    type = 'info';
+  }
+  
+  // Check if status has actually changed (efficient DOM updates)
+  const hasChanged = 
+    state.status.type !== type ||
+    state.status.message !== message ||
+    state.status.detail !== (detail || '');
+  
+  // Skip update if nothing changed
+  if (!hasChanged) {
+    return;
+  }
+  
+  // Update state
+  state.status.type = type;
+  state.status.message = message;
+  state.status.detail = detail || '';
+  
+  // Update status card styling based on status type (only if changed)
+  const expectedClass = `status-card--${type}`;
+  if (!statusCard.classList.contains(expectedClass)) {
+    // Remove all status modifier classes first
+    statusCard.className = 'status-card';
+    // Add the new status modifier class
+    statusCard.classList.add(expectedClass);
+  }
+  
+  // Update status message text (only if changed)
+  if (statusMessage.textContent !== message) {
+    statusMessage.textContent = message;
+  }
+  
+  // Update status detail text (only if changed)
+  const newDetail = detail || '';
+  if (statusDetail.textContent !== newDetail) {
+    statusDetail.textContent = newDetail;
+  }
+  
+  // Ensure ARIA live region announcements work properly
+  // aria-atomic="true" ensures the entire status card content is announced
+  statusCard.setAttribute('aria-atomic', 'true');
+  
+  // Set aria-live to "polite" for non-critical updates, "assertive" for errors
+  // This ensures screen readers announce status changes appropriately
+  if (type === 'error') {
+    statusCard.setAttribute('aria-live', 'assertive');
   } else {
-    statusDiv.textContent = 'This page is not supported. Please navigate to a Claude or DeepSeek chat.';
-    statusDiv.className = 'unsupported';
-    exportBtn.disabled = true;
+    statusCard.setAttribute('aria-live', 'polite');
+  }
+  
+  // Restore focus if it was on an interactive element
+  if (activeElementId && activeElement && activeElement.tagName !== 'BODY') {
+    requestAnimationFrame(() => {
+      const element = document.getElementById(activeElementId);
+      if (element && document.activeElement === document.body) {
+        element.focus();
+      }
+    });
+  }
+  
+  // Log status update for debugging
+  console.log(`Status updated: [${type}] ${message}${detail ? ' - ' + detail : ''}`);
+}
+
+/**
+ * Update export button state
+ * @param {boolean} enabled - Whether the button should be enabled
+ * @param {string} text - Optional button text override
+ * @param {boolean} showSpinner - Whether to show loading spinner in button
+ */
+function updateExportButton(enabled, text = null, showSpinner = false) {
+  const exportBtn = document.getElementById('exportBtn');
+  const buttonText = exportBtn.querySelector('.btn__text');
+  const buttonIcon = exportBtn.querySelector('.btn__icon');
+  
+  // Store focus state before update
+  const wasFocused = document.activeElement === exportBtn;
+  
+  // Check if button state has actually changed (efficient DOM updates)
+  const hasStateChanged = state.export.canExport !== enabled;
+  const currentText = buttonText ? buttonText.textContent : '';
+  const targetText = text || 'Export to CSV';
+  const hasTextChanged = currentText !== targetText;
+  const hasSpinnerChanged = buttonIcon.classList.contains('spinner') !== showSpinner;
+  
+  // Update state
+  const previousCanExport = state.export.canExport;
+  state.export.canExport = enabled;
+  
+  // Stop polling when export button becomes enabled
+  if (enabled && !previousCanExport) {
+    stopPolling();
+  }
+  
+  // Update DOM only if changed
+  if (hasStateChanged) {
+    exportBtn.disabled = !enabled;
+  }
+  
+  // Update button text only if changed
+  if (hasTextChanged && buttonText) {
+    buttonText.textContent = targetText;
+  }
+  
+  // Show/hide spinner in button only if changed
+  if (hasSpinnerChanged) {
+    if (showSpinner) {
+      // Replace download icon with spinner
+      buttonIcon.innerHTML = `
+        <svg class="spinner__svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <circle class="spinner__circle" cx="12" cy="12" r="10"></circle>
+        </svg>
+      `;
+      buttonIcon.classList.add('spinner');
+    } else {
+      // Restore download icon
+      buttonIcon.innerHTML = `
+        <path d="M8.75 1a.75.75 0 00-1.5 0v6.69L5.03 5.47a.75.75 0 00-1.06 1.06l3.5 3.5a.75.75 0 001.06 0l3.5-3.5a.75.75 0 10-1.06-1.06L8.75 7.69V1z" fill="currentColor"/>
+        <path d="M3.5 9.75a.75.75 0 00-1.5 0v1.5A2.75 2.75 0 004.75 14h6.5A2.75 2.75 0 0014 11.25v-1.5a.75.75 0 00-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5z" fill="currentColor"/>
+      `;
+      buttonIcon.classList.remove('spinner');
+    }
+  }
+  
+  // Restore focus if button was focused before update
+  if (wasFocused && !exportBtn.disabled) {
+    requestAnimationFrame(() => {
+      exportBtn.focus();
+    });
+  }
+}
+
+// ============================================================================
+// POLLING CONTROL
+// ============================================================================
+
+/**
+ * Start polling for status updates
+ * @param {number} interval - Polling interval in milliseconds (default: 3000ms)
+ */
+function startPolling(interval = 3000) {
+  // Don't start if already polling
+  if (state.polling.isPolling) {
+    return;
+  }
+  
+  state.polling.isPolling = true;
+  
+  // Clear any existing interval
+  if (state.polling.intervalId) {
+    clearInterval(state.polling.intervalId);
+  }
+  
+  // Set up new polling interval
+  state.polling.intervalId = setInterval(() => {
+    debouncedCheckAndUpdateUI();
+  }, interval);
+  
+  console.log(`Polling started with ${interval}ms interval`);
+}
+
+/**
+ * Stop polling for status updates
+ */
+function stopPolling() {
+  if (!state.polling.isPolling) {
+    return;
+  }
+  
+  state.polling.isPolling = false;
+  
+  if (state.polling.intervalId) {
+    clearInterval(state.polling.intervalId);
+    state.polling.intervalId = null;
+  }
+  
+  // Clear any pending debounce timeout
+  if (state.polling.debounceTimeout) {
+    clearTimeout(state.polling.debounceTimeout);
+    state.polling.debounceTimeout = null;
+  }
+  
+  console.log('Polling stopped');
+}
+
+/**
+ * Debounced version of checkAndUpdateUI to prevent excessive updates
+ * Uses a 300ms debounce delay
+ */
+function debouncedCheckAndUpdateUI() {
+  // Clear any existing debounce timeout
+  if (state.polling.debounceTimeout) {
+    clearTimeout(state.polling.debounceTimeout);
+  }
+  
+  // Set new debounce timeout
+  state.polling.debounceTimeout = setTimeout(() => {
+    const now = Date.now();
+    const timeSinceLastUpdate = now - state.polling.lastUpdateTime;
+    
+    // Ensure minimum 200ms between actual updates
+    if (timeSinceLastUpdate >= 200) {
+      state.polling.lastUpdateTime = now;
+      checkAndUpdateUI();
+    }
+  }, 300);
+}
+
+// ============================================================================
+// STATUS CHECK AND UPDATE
+// ============================================================================
+
+/**
+ * Check if conversation data is available for platforms that require it
+ * @param {Object} tab - Browser tab object
+ * @param {Object} platform - Platform object
+ * @param {string} conversationId - Conversation ID
+ * @returns {Promise<boolean>} Whether data is available
+ */
+async function checkConversationData(tab, platform, conversationId) {
+  try {
+    const response = await browser.tabs.sendMessage(tab.id, { 
+      type: 'GET_CAPTURED_CONVERSATIONS' 
+    });
+    
+    if (response && response.success && response.conversationIds) {
+      return response.conversationIds.includes(conversationId);
+    }
+    
+    // If no response or no conversation IDs, assume data is available
+    return true;
+  } catch (error) {
+    // If content script not responding, assume data is available
+    console.log('Content script not responding, assuming data available');
+    return true;
   }
 }
 
 /**
- * Handles the export button click event
- * Validates the current tab and injects the content script
+ * Update UI based on current tab and platform detection
  */
-function handleExportClick() {
-  const statusDiv = document.getElementById('status');
-  const exportBtn = document.getElementById('exportBtn');
-  
-  // Query the active tab
-  browser.tabs.query({ active: true, currentWindow: true })
-    .then(tabs => {
-      if (tabs.length === 0) {
-        statusDiv.textContent = 'No active tab found.';
-        statusDiv.className = 'error';
-        return;
-      }
-      
-      const tab = tabs[0];
-      const siteType = getSiteType(tab.url);
-      
-      // Validate current tab URL before injection
-      if (!siteType) {
-        statusDiv.textContent = 'This page is not supported. Please navigate to a Claude or DeepSeek chat.';
-        statusDiv.className = 'unsupported';
-        return;
-      }
-      
-      // Disable button during injection
-      exportBtn.disabled = true;
-      statusDiv.textContent = 'Exporting chat...';
-      statusDiv.className = 'supported';
-      
-      // Inject content script
-      browser.tabs.executeScript(tab.id, { file: 'content.js' })
-        .then(() => {
-          // Success - content script will handle the rest
-          statusDiv.textContent = 'Export initiated. Check your downloads.';
-          statusDiv.className = 'supported';
-          
-          // Re-enable button after a short delay
-          setTimeout(() => {
-            exportBtn.disabled = false;
-            statusDiv.textContent = `${siteType.charAt(0).toUpperCase() + siteType.slice(1)} chat detected. Ready to export.`;
-          }, 2000);
-        })
-        .catch(error => {
-          console.error('Injection failed:', error);
-          statusDiv.textContent = 'Failed to inject export script into this page.';
-          statusDiv.className = 'error';
-          exportBtn.disabled = false;
+async function checkAndUpdateUI() {
+  try {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    
+    if (tabs.length === 0) {
+      displayError('NO_ACTIVE_TAB');
+      updatePlatformBadge(null);
+      return;
+    }
+
+    const tab = tabs[0];
+    const url = tab.url || '';
+    
+    // Store current tab in state
+    state.currentTab = tab;
+    
+    // Detect platform
+    const platform = detectPlatform(url);
+    
+    // Update platform badge
+    updatePlatformBadge(platform);
+    
+    // Update state
+    state.platform.id = platform ? platform.id : null;
+    state.platform.name = platform ? platform.name : null;
+
+    if (!platform) {
+      displayError('UNSUPPORTED_PLATFORM');
+      return;
+    }
+
+    // Check if platform requires conversation ID
+    const { hasConversationId, conversationId } = checkConversationId(platform, url);
+    state.platform.conversationId = conversationId;
+    
+    // Platform-specific status logic
+    if (platform.requiresConversationId && !hasConversationId) {
+      // ChatGPT or Copilot without conversation ID
+      displayError('NO_CONVERSATION_ID', {
+        platformId: platform.id,
+        customDetail: `Please open or start a conversation on ${platform.name}.`
+      });
+      return;
+    }
+
+    // For platforms that require conversation ID (ChatGPT, Copilot)
+    if (platform.requiresConversationId && conversationId) {
+      try {
+        const hasData = await checkConversationData(tab, platform, conversationId);
+        
+        if (hasData) {
+          // Data is ready for export
+          updateStatus(
+            'success',
+            `Ready to export ${platform.name} conversation.`,
+            'Click the button below to download as CSV.'
+          );
+          updateExportButton(true);
+        } else {
+          // Waiting for conversation data to load
+          updateStatus(
+            'loading',
+            `Loading ${platform.name} conversation data...`,
+            'Please wait while the conversation loads.'
+          );
+          updateExportButton(false);
+        }
+      } catch (error) {
+        // Content script might not be loaded yet
+        logError('checkConversationData', error, { platformId: platform.id, conversationId });
+        displayError('CONTENT_SCRIPT_NOT_LOADED', {
+          platformId: platform.id,
+          originalError: error
         });
-    })
-    .catch(error => {
-      console.error('Error querying tabs:', error);
-      statusDiv.textContent = 'Error accessing tab information.';
-      statusDiv.className = 'error';
+      }
+      return;
+    }
+
+    // For API interception platforms (Claude, DeepSeek, Copilot without conversation ID)
+    // These platforms capture data via local client-side API interception
+    if (platform.id === 'claude') {
+      updateStatus(
+        'success',
+        'Ready to export Claude conversation.',
+        'Data is captured locally as you chat. Click below to export.'
+      );
+      updateExportButton(true);
+    } else if (platform.id === 'deepseek') {
+      updateStatus(
+        'success',
+        'Ready to export DeepSeek conversation.',
+        'Data is captured locally as you chat. Click below to export.'
+      );
+      updateExportButton(true);
+    } else if (platform.id === 'gemini') {
+      updateStatus(
+        'success',
+        'Ready to export Gemini conversation.',
+        'Click the button below to download as CSV.'
+      );
+      updateExportButton(true);
+    } else {
+      // Fallback for any other platforms
+      updateStatus(
+        'success',
+        `Ready to export ${platform.name} conversation.`,
+        'Click the button below to download as CSV.'
+      );
+      updateExportButton(true);
+    }
+  } catch (error) {
+    logError('checkAndUpdateUI', error);
+    displayError('UNKNOWN_ERROR', {
+      originalError: error,
+      customDetail: 'Error accessing tab information. Please try closing and reopening the popup.'
     });
+  }
 }
 
-// Initialize popup when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-  // Query the active tab
-  browser.tabs.query({ active: true, currentWindow: true })
-    .then(tabs => {
-      if (tabs.length > 0) {
-        updateStatus(tabs[0]);
-      } else {
-        updateStatus(null);
-      }
-    })
-    .catch(error => {
-      console.error('Error querying tabs:', error);
-      const statusDiv = document.getElementById('status');
-      statusDiv.textContent = 'Error accessing tab information.';
-      statusDiv.className = 'error';
-      document.getElementById('exportBtn').disabled = true;
-    });
+// ============================================================================
+// EVENT HANDLERS
+// ============================================================================
+
+/**
+ * Handle export button click
+ */
+async function handleExportClick() {
+  // Prevent multiple simultaneous exports
+  if (state.export.isExporting) {
+    logError('handleExportClick', 'Export already in progress', { isExporting: true });
+    return;
+  }
   
-  // Add click handler for export button
-  document.getElementById('exportBtn').addEventListener('click', handleExportClick);
-});
+  state.export.isExporting = true;
+  state.export.lastError = null; // Clear previous error
+  
+  // Show loading state with spinner in button
+  updateExportButton(false, 'Exporting...', true);
+  updateStatus('loading', 'Exporting conversation...', 'Please wait.');
+
+  try {
+    const tab = state.currentTab;
+    
+    if (!tab) {
+      throw new Error('NO_ACTIVE_TAB');
+    }
+
+    const platform = detectPlatform(tab.url);
+    
+    if (!platform) {
+      throw new Error('UNSUPPORTED_PLATFORM');
+    }
+
+    // Build export message
+    const exportMessage = {
+      type: 'EXPORT_CONVERSATION',
+      platform: platform.id
+    };
+    
+    // Add conversation ID if required
+    if (platform.requiresConversationId) {
+      const conversationId = state.platform.conversationId;
+      
+      if (!conversationId) {
+        throw new Error('NO_CONVERSATION_ID');
+      }
+      
+      exportMessage.conversationId = conversationId;
+    }
+
+    logDebug('handleExportClick', 'Starting export', {
+      platform: platform.id,
+      hasConversationId: !!exportMessage.conversationId,
+      tabId: tab.id
+    });
+
+    // Send export request to content script
+    let response;
+    try {
+      response = await browser.tabs.sendMessage(tab.id, exportMessage);
+    } catch (messageError) {
+      // Content script communication error
+      logError('handleExportClick', messageError, {
+        platform: platform.id,
+        messageType: 'EXPORT_CONVERSATION'
+      });
+      
+      // Determine specific error type
+      if (messageError.message && messageError.message.includes('Receiving end does not exist')) {
+        throw new Error('CONTENT_SCRIPT_NOT_LOADED');
+      } else if (messageError.message && messageError.message.includes('permission')) {
+        throw new Error('PERMISSION_DENIED');
+      } else {
+        throw new Error('NETWORK_ERROR');
+      }
+    }
+    
+    if (response && response.success) {
+      // Export successful
+      logDebug('handleExportClick', 'Export completed successfully', {
+        platform: platform.id,
+        conversationId: exportMessage.conversationId
+      });
+      
+      updateStatus(
+        'success',
+        'Export complete!',
+        'Check your Downloads folder.'
+      );
+      
+      // Reset button to normal state (no spinner)
+      updateExportButton(false, 'Export to CSV', false);
+      
+      // Auto-close after 2 seconds
+      setTimeout(() => {
+        window.close();
+      }, 2000);
+    } else {
+      // Export failed with error from content script
+      const errorMessage = response?.error || 'Unknown error occurred';
+      const sanitizedError = sanitizeErrorMessage(errorMessage);
+      
+      logError('handleExportClick', `Export failed: ${errorMessage}`, {
+        platform: platform.id,
+        response
+      });
+      
+      // Check for specific error patterns
+      if (errorMessage.toLowerCase().includes('no data') || 
+          errorMessage.toLowerCase().includes('no conversation') ||
+          errorMessage.toLowerCase().includes('empty')) {
+        throw new Error('NO_DATA_AVAILABLE');
+      } else {
+        throw new Error(`EXPORT_FAILED:${sanitizedError}`);
+      }
+    }
+  } catch (error) {
+    const errorMessage = error.message || 'UNKNOWN_ERROR';
+    
+    // Reset export state
+    state.export.isExporting = false;
+    
+    // Reset button to normal state (remove spinner)
+    updateExportButton(true, 'Export to CSV', false);
+    
+    // Handle specific error types
+    if (errorMessage === 'NO_ACTIVE_TAB') {
+      displayError('NO_ACTIVE_TAB', { originalError: error });
+    } else if (errorMessage === 'UNSUPPORTED_PLATFORM') {
+      displayError('UNSUPPORTED_PLATFORM', { originalError: error });
+    } else if (errorMessage === 'NO_CONVERSATION_ID') {
+      displayError('NO_CONVERSATION_ID', {
+        platformId: state.platform.id,
+        originalError: error
+      });
+    } else if (errorMessage === 'CONTENT_SCRIPT_NOT_LOADED') {
+      displayError('CONTENT_SCRIPT_NOT_LOADED', {
+        platformId: state.platform.id,
+        originalError: error
+      });
+    } else if (errorMessage === 'PERMISSION_DENIED') {
+      displayError('PERMISSION_DENIED', {
+        platformId: state.platform.id,
+        originalError: error
+      });
+    } else if (errorMessage === 'NETWORK_ERROR') {
+      displayError('NETWORK_ERROR', {
+        platformId: state.platform.id,
+        originalError: error
+      });
+    } else if (errorMessage === 'NO_DATA_AVAILABLE') {
+      displayError('NO_DATA_AVAILABLE', {
+        platformId: state.platform.id,
+        originalError: error
+      });
+    } else if (errorMessage.startsWith('EXPORT_FAILED:')) {
+      const customDetail = errorMessage.replace('EXPORT_FAILED:', '');
+      displayError('EXPORT_FAILED', {
+        platformId: state.platform.id,
+        customDetail: customDetail,
+        originalError: error
+      });
+    } else {
+      // Unknown error - sanitize and display
+      const sanitizedError = sanitizeErrorMessage(errorMessage);
+      displayError('UNKNOWN_ERROR', {
+        platformId: state.platform.id,
+        customDetail: sanitizedError,
+        originalError: error
+      });
+    }
+  }
+}
+
+// ============================================================================
+// KEYBOARD NAVIGATION
+// ============================================================================
+
+/**
+ * Handle keyboard events for accessibility
+ * Ensures Enter and Space keys work on all interactive elements
+ * @param {KeyboardEvent} event - Keyboard event
+ */
+function handleKeyboardNavigation(event) {
+  const target = event.target;
+  
+  // Handle Enter and Space keys on buttons (native behavior, but ensure consistency)
+  if (target.tagName === 'BUTTON' && (event.key === 'Enter' || event.key === ' ')) {
+    event.preventDefault();
+    target.click();
+  }
+  
+  // Handle Enter and Space keys on summary elements (native behavior, but ensure consistency)
+  if (target.tagName === 'SUMMARY' && (event.key === 'Enter' || event.key === ' ')) {
+    // Native behavior handles this, but we can add custom logic if needed
+    // For now, let the native behavior work
+  }
+}
+
+/**
+ * Ensure focus is maintained during UI state changes
+ * Prevents focus loss when status updates or button state changes
+ */
+function maintainFocus() {
+  const activeElement = document.activeElement;
+  
+  // If focus is on an element that's about to be updated, maintain focus
+  if (activeElement && activeElement.id) {
+    // Store the focused element ID
+    const focusedId = activeElement.id;
+    
+    // After DOM updates, restore focus if the element still exists
+    requestAnimationFrame(() => {
+      const element = document.getElementById(focusedId);
+      if (element && element !== document.activeElement) {
+        // Only restore focus if it was lost
+        if (document.activeElement === document.body) {
+          element.focus();
+        }
+      }
+    });
+  }
+}
+
+/**
+ * Verify no keyboard traps exist
+ * Ensures all focusable elements can be reached and exited via keyboard
+ * @returns {boolean} True if no keyboard traps detected
+ */
+function verifyNoKeyboardTraps() {
+  const focusableElements = document.querySelectorAll(
+    'button:not([disabled]), summary, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  );
+  
+  if (focusableElements.length === 0) {
+    console.warn('No focusable elements found');
+    return false;
+  }
+  
+  // Check that all focusable elements are reachable
+  let allReachable = true;
+  focusableElements.forEach((element, index) => {
+    // Check if element is visible and not hidden
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden') {
+      return; // Skip hidden elements
+    }
+    
+    // Check if element has proper tabindex
+    const tabindex = element.getAttribute('tabindex');
+    if (tabindex && parseInt(tabindex) < 0) {
+      console.warn(`Element ${element.tagName} has negative tabindex:`, element);
+      allReachable = false;
+    }
+  });
+  
+  console.log(`Keyboard navigation check: ${focusableElements.length} focusable elements found`);
+  return allReachable;
+}
+
+/**
+ * Set up proper tab order for all interactive elements
+ * Ensures logical navigation flow through the popup
+ */
+function setupTabOrder() {
+  // Get all interactive elements in the desired tab order
+  const exportBtn = document.getElementById('exportBtn');
+  const infoSection = document.getElementById('infoSection');
+  const infoToggle = infoSection?.querySelector('summary');
+  
+  // Ensure elements have proper tabindex (0 for natural tab order)
+  // Native elements like button and summary already have proper tab order
+  // This is just a verification step
+  
+  if (exportBtn) {
+    // Button already has natural tab order
+    exportBtn.setAttribute('tabindex', '0');
+  }
+  
+  if (infoToggle) {
+    // Summary already has natural tab order
+    infoToggle.setAttribute('tabindex', '0');
+  }
+  
+  console.log('Tab order configured for keyboard navigation');
+}
+
+/**
+ * Handle focus management during state changes
+ * Ensures focus is not lost when UI updates
+ */
+function handleFocusDuringStateChange() {
+  // Store the currently focused element before state change
+  const activeElement = document.activeElement;
+  const activeElementId = activeElement?.id;
+  
+  // Return a function to restore focus after state change
+  return () => {
+    if (activeElementId) {
+      const element = document.getElementById(activeElementId);
+      if (element && document.activeElement === document.body) {
+        // Focus was lost, restore it
+        element.focus();
+      }
+    }
+  };
+}
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
+/**
+ * Initialize popup UI
+ */
+function init() {
+  // Set up event listeners
+  const exportBtn = document.getElementById('exportBtn');
+  exportBtn.addEventListener('click', handleExportClick);
+  
+  // Set up keyboard navigation
+  document.addEventListener('keydown', handleKeyboardNavigation);
+  
+  // Set up proper tab order
+  setupTabOrder();
+  
+  // Verify no keyboard traps
+  verifyNoKeyboardTraps();
+  
+  // Initial UI update
+  checkAndUpdateUI();
+  
+  // Start polling for status updates every 3 seconds (increased from 2s for efficiency)
+  // Polling will automatically stop when export button is enabled
+  startPolling(3000);
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', init);
