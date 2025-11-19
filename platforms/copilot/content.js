@@ -257,16 +257,9 @@
       totalCaptured: capturedConversations.size
     });
 
-    // Forward to background script for processing
-    browser.runtime.sendMessage({
-      type: MESSAGE_TYPE,
-      payload: conversationData,
-      platform: 'copilot'
-    }).then(() => {
-      logDebug('Forwarded conversation data to background script');
-    }).catch(error => {
-      logError('Failed to send message to background', { error: error.message });
-    });
+    // AUTOMATIC DOWNLOAD DISABLED FOR POLICY COMPLIANCE
+    // Data is stored in memory (capturedConversations) and waits for manual export via popup
+    logDebug('Conversation data captured and stored in memory', { conversationId });
 
     // Notify popup that conversation data is ready (event-driven update)
     browser.runtime.sendMessage({

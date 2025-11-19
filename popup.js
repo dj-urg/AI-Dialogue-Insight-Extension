@@ -46,77 +46,9 @@ const PLATFORMS = {
 // ERROR HANDLING CONFIGURATION
 // ============================================================================
 
-/**
- * Error types and their corresponding user-friendly messages
- */
-const ERROR_TYPES = {
-  NO_ACTIVE_TAB: {
-    message: 'Unable to access current tab',
-    detail: 'Please try closing and reopening the popup.',
-    troubleshooting: 'If the issue persists, try reloading the page or restarting your browser.'
-  },
-  UNSUPPORTED_PLATFORM: {
-    message: 'This page is not supported',
-    detail: 'Please navigate to a supported chat platform.',
-    troubleshooting: 'Supported platforms: ChatGPT, Claude, and Copilot.'
-  },
-  NO_CONVERSATION_ID: {
-    message: 'No conversation detected',
-    detail: 'Please open or start a conversation to export.',
-    troubleshooting: null // Platform-specific, set dynamically
-  },
-  CONTENT_SCRIPT_NOT_LOADED: {
-    message: 'Extension not ready',
-    detail: 'The page may still be loading.',
-    troubleshooting: 'Try refreshing the page and waiting a few seconds before exporting.'
-  },
-  NO_DATA_AVAILABLE: {
-    message: 'No conversation data found',
-    detail: 'The conversation may be empty or not yet loaded.',
-    troubleshooting: null // Platform-specific, set dynamically
-  },
-  EXPORT_FAILED: {
-    message: 'Export failed',
-    detail: 'An error occurred during export.',
-    troubleshooting: null // Platform-specific, set dynamically
-  },
-  PERMISSION_DENIED: {
-    message: 'Permission denied',
-    detail: 'Unable to access the page content.',
-    troubleshooting: 'Please check that the extension has permission to access this site in your browser settings.'
-  },
-  NETWORK_ERROR: {
-    message: 'Network error',
-    detail: 'Unable to communicate with the page.',
-    troubleshooting: 'Check your internet connection and try refreshing the page.'
-  },
-  UNKNOWN_ERROR: {
-    message: 'An unexpected error occurred',
-    detail: 'Please try again.',
-    troubleshooting: 'If the problem continues, try reloading the page or restarting your browser.'
-  }
-};
-
-/**
- * Platform-specific troubleshooting tips
- */
-const PLATFORM_TROUBLESHOOTING = {
-  chatgpt: {
-    noConversationId: 'Make sure you are on a conversation page (URL should contain /c/).',
-    noData: 'Try scrolling through the conversation to ensure all messages are loaded.',
-    exportFailed: 'Try refreshing the page and waiting for the conversation to fully load before exporting.'
-  },
-  claude: {
-    noData: 'Start a conversation first, then try exporting. Data is captured as you chat.',
-    exportFailed: 'Make sure you have sent at least one message in the conversation before exporting.'
-  },
-  copilot: {
-    noConversationId: 'Make sure you are on a conversation page (URL should contain /chats/).',
-    noData: 'Try scrolling through the conversation to ensure all messages are loaded.',
-    exportFailed: 'Try refreshing the page and waiting for the conversation to fully load before exporting.'
-  },
-
-};
+// Error taxonomy and platform troubleshooting are defined in shared/errors.js
+// (loaded via popup.html). See shared/errors.js for ERROR_TYPES and
+// PLATFORM_TROUBLESHOOTING.
 
 // ============================================================================
 // STATE MANAGEMENT
@@ -282,109 +214,68 @@ function checkConversationId(platform, url) {
 // ============================================================================
 
 /**
- * Sanitize error message to prevent exposure of sensitive data
- * Removes UUIDs, emails, file paths, URLs, tokens, and organization IDs
- * @param {string} message - Raw error message
- * @returns {string} Sanitized error message
+ * Sanitization of error messages is handled by shared/errors.js.
+ * This file relies on the global sanitizeErrorMessage defined there.
  */
-function sanitizeErrorMessage(message) {
-  if (!message) return 'An error occurred';
-
-  // Ensure message is a string
-  let sanitized = String(message);
-
-  // Remove UUIDs (conversation IDs, session IDs, etc.)
-  sanitized = sanitized.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '[id]');
-
-  // Remove email addresses
-  sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[email]');
-
-  // Remove Windows file paths (e.g., C:\Users\username\file.txt)
-  sanitized = sanitized.replace(/[A-Za-z]:\\[\w\\\-. ]+/g, '[path]');
-
-  // Remove Unix/Mac file paths (e.g., /home/username/file.txt)
-  // Be conservative to avoid removing legitimate text like "and/or"
-  sanitized = sanitized.replace(/\/(?:home|users|usr|var|opt|etc)[\w\/\-. ]*/gi, '[path]');
-  sanitized = sanitized.replace(/\/[\w\-]+\/[\w\-]+\/[\w\/\-. ]{10,}/g, '[path]');
-
-  // Remove URLs (must be done before token removal to avoid partial matches)
-  sanitized = sanitized.replace(/https?:\/\/[^\s]+/g, '[url]');
-
-  // Remove organization IDs (e.g., org-abc123, org_abc123)
-  sanitized = sanitized.replace(/org[-_][a-zA-Z0-9]+/gi, '[org-id]');
-
-  // Remove project IDs (e.g., proj-abc123, project-abc123)
-  sanitized = sanitized.replace(/proj(?:ect)?[-_][a-zA-Z0-9]+/gi, '[project-id]');
-
-  // Remove API keys and tokens (more conservative - only long alphanumeric strings)
-  // Use word boundaries to avoid removing legitimate words
-  sanitized = sanitized.replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[token]');
-
-  // Remove potential session tokens or JWT tokens
-  sanitized = sanitized.replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[jwt]');
-
-  // Remove IP addresses
-  sanitized = sanitized.replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[ip]');
-
-  // Remove port numbers in URLs or addresses
-  sanitized = sanitized.replace(/:\d{2,5}\b/g, ':[port]');
-
-  // Truncate very long messages
-  if (sanitized.length > 200) {
-    sanitized = sanitized.substring(0, 197) + '...';
-  }
-
-  return sanitized;
-}
 
 /**
- * Log detailed error information to console for debugging
+ * Log detailed error information using shared logger with popup context.
  * @param {string} context - Context where error occurred
  * @param {Error|string} error - Error object or message
  * @param {Object} additionalInfo - Additional debugging information
  */
-function logError(context, error, additionalInfo = {}) {
+function popupLogError(context, error, additionalInfo = {}) {
   const timestamp = new Date().toISOString();
-  const errorMessage = error instanceof Error ? error.message : error;
+  const errorMessage = error instanceof Error ? error.message : String(error);
   const errorStack = error instanceof Error ? error.stack : null;
 
-  console.group(`🔴 Error in ${context} [${timestamp}]`);
-  console.error('Message:', errorMessage);
+  const logData = {
+    ...additionalInfo,
+    context,
+    timestamp,
+    state: {
+      platform: state.platform,
+      export: state.export,
+      status: state.status
+    }
+  };
 
   if (errorStack) {
-    console.error('Stack:', errorStack);
+    logData.errorStack = errorStack;
   }
 
-  if (Object.keys(additionalInfo).length > 0) {
-    console.error('Additional Info:', additionalInfo);
+  if (typeof logError === 'function') {
+    logError('popup', errorMessage, logData);
+  } else {
+    console.error('[popup] [ERROR]', errorMessage, logData);
   }
-
-  console.error('Current State:', {
-    platform: state.platform,
-    export: state.export,
-    status: state.status
-  });
-
-  console.groupEnd();
 }
 
 /**
- * Log debug information to console
+ * Log debug information using shared logger with popup context.
  * @param {string} context - Context of the log
  * @param {string} message - Log message
  * @param {Object} additionalInfo - Additional debugging information
  */
-function logDebug(context, message, additionalInfo = {}) {
+function popupLogDebug(context, message, additionalInfo = {}) {
   const timestamp = new Date().toISOString();
 
-  console.group(`ℹ️ ${context} [${timestamp}]`);
-  console.log('Message:', message);
+  const logData = {
+    ...additionalInfo,
+    context,
+    timestamp,
+    state: {
+      platform: state.platform,
+      export: state.export,
+      status: state.status
+    }
+  };
 
-  if (Object.keys(additionalInfo).length > 0) {
-    console.log('Details:', additionalInfo);
+  if (typeof logDebug === 'function') {
+    logDebug('popup', message, logData);
+  } else {
+    console.log('[popup] [DEBUG]', message, logData);
   }
-
-  console.groupEnd();
 }
 
 /**
@@ -416,7 +307,7 @@ function displayError(errorType, options = {}) {
 
   // Log detailed error for debugging
   if (originalError) {
-    logError(errorType, originalError, {
+    popupLogError(errorType, originalError, {
       platformId,
       errorType,
       customDetail,
@@ -935,7 +826,7 @@ async function checkAndUpdateUI() {
         }
       } catch (error) {
         // Content script might not be loaded yet
-        logError('checkConversationData', error, { platformId: platform.id, conversationId });
+        popupLogError('checkConversationData', error, { platformId: platform.id, conversationId });
         displayError('CONTENT_SCRIPT_NOT_LOADED', {
           platformId: platform.id,
           originalError: error
@@ -974,7 +865,7 @@ async function checkAndUpdateUI() {
       updateFilePreview('conversation');
     }
   } catch (error) {
-    logError('checkAndUpdateUI', error);
+    popupLogError('checkAndUpdateUI', error);
     displayError('UNKNOWN_ERROR', {
       originalError: error,
       customDetail: 'Error accessing tab information. Please try closing and reopening the popup.'
@@ -1001,7 +892,7 @@ async function handleExportClick() {
       'Please wait before exporting again',
       `Rate limit: Please wait ${waitTime} second${waitTime !== 1 ? 's' : ''} between exports.`
     );
-    logError('handleExportClick', 'Rate limit: minimum interval', {
+    popupLogError('handleExportClick', 'Rate limit: minimum interval', {
       timeSinceLastExport,
       minInterval: exportRateLimit.minInterval
     });
@@ -1022,7 +913,7 @@ async function handleExportClick() {
       'Too many exports',
       `Rate limit: Maximum ${exportRateLimit.maxExportsPerMinute} exports per minute. Please wait ${waitTime} second${waitTime !== 1 ? 's' : ''}.`
     );
-    logError('handleExportClick', 'Rate limit: max per minute exceeded', {
+    popupLogError('handleExportClick', 'Rate limit: max per minute exceeded', {
       recentExportsCount: exportRateLimit.recentExports.length,
       maxExportsPerMinute: exportRateLimit.maxExportsPerMinute
     });
@@ -1031,7 +922,7 @@ async function handleExportClick() {
 
   // Prevent multiple simultaneous exports
   if (state.export.isExporting) {
-    logError('handleExportClick', 'Export already in progress', { isExporting: true });
+    popupLogError('handleExportClick', 'Export already in progress', { isExporting: true });
     return;
   }
 
@@ -1076,7 +967,7 @@ async function handleExportClick() {
       exportMessage.conversationId = conversationId;
     }
 
-    logDebug('handleExportClick', 'Starting export', {
+    popupLogDebug('handleExportClick', 'Starting export', {
       platform: platform.id,
       hasConversationId: !!exportMessage.conversationId,
       tabId: tab.id
@@ -1088,7 +979,7 @@ async function handleExportClick() {
       response = await browser.tabs.sendMessage(tab.id, exportMessage);
     } catch (messageError) {
       // Content script communication error
-      logError('handleExportClick', messageError, {
+      popupLogError('handleExportClick', messageError, {
         platform: platform.id,
         messageType: 'EXPORT_CONVERSATION'
       });
@@ -1105,7 +996,7 @@ async function handleExportClick() {
 
     if (response && response.success) {
       // Export successful
-      logDebug('handleExportClick', 'Export completed successfully', {
+      popupLogDebug('handleExportClick', 'Export completed successfully', {
         platform: platform.id,
         conversationId: exportMessage.conversationId
       });
@@ -1128,7 +1019,7 @@ async function handleExportClick() {
       const errorMessage = response?.error || 'Unknown error occurred';
       const sanitizedError = sanitizeErrorMessage(errorMessage);
 
-      logError('handleExportClick', `Export failed: ${errorMessage}`, {
+      popupLogError('handleExportClick', `Export failed: ${errorMessage}`, {
         platform: platform.id,
         response
       });
